@@ -24,3 +24,14 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* 共通の部品（ログイン画面と同じ配色） */
+.btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 0.5rem; background: #3d5a80; color: #fff; font-weight: 700; padding: 0.6rem 1.25rem; cursor: pointer; text-align: center; }
+.btn:hover { background: #32496a; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-sub { background: #fff; color: #3d5a80; border: 2px solid #3d5a80; }
+.btn-sub:hover { background: #eef2f7; }
+.card { border: 1px solid #444; border-radius: 0.5rem; background: #fff; padding: 1rem; }
+.badge { display: inline-block; border-radius: 9999px; padding: 0.1rem 0.7rem; font-size: 0.8rem; font-weight: 700; }
+.badge-ok { background: #dff3e4; color: #1b6b32; }
+.badge-ng { background: #eee; color: #555; }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase } from '@/lib/supabase'
 
 // S-01 ⑤：認証に失敗・キャンセルしたときに表示するメッセージ
 const LOGIN_ERROR_MESSAGE = 'ログインに失敗しました。もう一度お試しください'

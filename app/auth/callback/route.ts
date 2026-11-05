@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const code = searchParams.get('code')
 
   if (!code) {
-    return NextResponse.redirect(`${origin}/?error=auth`)
+    return NextResponse.redirect(`${origin}/auth/login?error=auth`)
   }
 
   const cookieStore = await cookies()
@@ -33,14 +33,14 @@ export async function GET(request: Request) {
     await supabase.auth.exchangeCodeForSession(code)
 
   if (authError) {
-    return NextResponse.redirect(`${origin}/?error=auth`)
+    return NextResponse.redirect(`${origin}/auth/login?error=auth`)
   }
 
   const { data: { user }, error: userError } =
     await supabase.auth.getUser()
 
   if (userError || !user) {
-    return NextResponse.redirect(`${origin}/?error=user`)
+    return NextResponse.redirect(`${origin}/auth/login?error=user`)
   }
 
   const googleIdentity = user.identities?.find(
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     user.user_metadata?.sub
 
   if (!googleId || !user.email) {
-    return NextResponse.redirect(`${origin}/?error=profile`)
+    return NextResponse.redirect(`${origin}/auth/login?error=profile`)
   }
 
   const { error: dbError } = await supabase
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
 
   if (dbError) {
     console.error('ユーザー登録エラー:', dbError)
-    return NextResponse.redirect(`${origin}/?error=registration`)
+    return NextResponse.redirect(`${origin}/auth/login?error=registration`)
   }
 
   return NextResponse.redirect(`${origin}/`)
