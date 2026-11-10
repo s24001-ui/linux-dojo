@@ -3,6 +3,8 @@ import LessonView from '@/components/LessonView'
 import { lessons } from '@/lib/data'
 
 // S-03 レッスン画面
+export const instant = false
+
 export function generateStaticParams() {
   return lessons.map((l) => ({ id: l.id }))
 }
