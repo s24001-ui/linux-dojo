@@ -1,15 +1,20 @@
 import { notFound } from 'next/navigation'
+import { Suspense } from 'react'
 import QuizView from '@/components/QuizView'
-import { lessons } from '@/lib/data'
+import { getLesson, getQuizQuestions } from '@/lib/db'
 
 // S-04 確認テスト画面
-export function generateStaticParams() {
-  return lessons.map((l) => ({ id: l.id }))
+export default function QuizPage({ params }: PageProps<'/lessons/[id]/quiz'>) {
+  return (
+    <Suspense fallback={<p>読み込み中…</p>}>
+      <Quiz params={params} />
+    </Suspense>
+  )
 }
 
-export default async function QuizPage({ params }: PageProps<'/lessons/[id]/quiz'>) {
+async function Quiz({ params }: { params: PageProps<'/lessons/[id]/quiz'>['params'] }) {
   const { id } = await params
-  const lesson = lessons.find((l) => l.id === id)
-  if (!lesson) notFound()
-  return <QuizView id={id} />
+  const data = await getLesson(id)
+  if (!data) notFound()
+  return <QuizView lesson={data.lesson} questions={await getQuizQuestions(id)} />
 }

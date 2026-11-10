@@ -1,15 +1,20 @@
 import { notFound } from 'next/navigation'
+import { Suspense } from 'react'
 import PracticalView from '@/components/PracticalView'
-import { practicals } from '@/lib/data'
+import { getPractical } from '@/lib/db'
 
-// S-08 実技テスト画面
-export function generateStaticParams() {
-  return practicals.map((t) => ({ id: t.id }))
+// S-08 実技テスト画面（URLはレッスンコード）
+export default function TestPage({ params }: PageProps<'/tests/[id]'>) {
+  return (
+    <Suspense fallback={<p>読み込み中…</p>}>
+      <Test params={params} />
+    </Suspense>
+  )
 }
 
-export default async function TestPage({ params }: PageProps<'/tests/[id]'>) {
+async function Test({ params }: { params: PageProps<'/tests/[id]'>['params'] }) {
   const { id } = await params
-  const test = practicals.find((t) => t.id === id)
+  const test = await getPractical(id)
   if (!test) notFound()
-  return <PracticalView id={id} />
+  return <PracticalView test={test} />
 }

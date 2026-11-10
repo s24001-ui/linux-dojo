@@ -1,15 +1,20 @@
 import { notFound } from 'next/navigation'
+import { Suspense } from 'react'
 import ScenarioView from '@/components/ScenarioView'
-import { scenarios } from '@/lib/data'
+import { getScenario } from '@/lib/db'
 
 // S-15 シナリオ画面
-export function generateStaticParams() {
-  return scenarios.map((s) => ({ id: s.id }))
+export default function ScenarioPage({ params }: PageProps<'/scenarios/[id]'>) {
+  return (
+    <Suspense fallback={<p>読み込み中…</p>}>
+      <Scenario params={params} />
+    </Suspense>
+  )
 }
 
-export default async function ScenarioPage({ params }: PageProps<'/scenarios/[id]'>) {
+async function Scenario({ params }: { params: PageProps<'/scenarios/[id]'>['params'] }) {
   const { id } = await params
-  const scenario = scenarios.find((s) => s.id === id)
+  const scenario = /^\d+$/.test(id) ? await getScenario(Number(id)) : null
   if (!scenario) notFound()
-  return <ScenarioView id={id} />
+  return <ScenarioView scenario={scenario} />
 }
