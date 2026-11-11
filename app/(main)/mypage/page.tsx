@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import LogoutButton from '@/components/LogoutButton'
 import { getLessons, getMe, getProgress } from '@/lib/db'
+import { QUIZ_SIZE } from '@/lib/quiz'
 
 // S-13 マイページ（レベル・XP・バッジは【Want】のため未実装）
 export default function MyPage() {
@@ -28,7 +29,7 @@ async function My() {
       <section className="card">
         <h2 className="mb-2 font-bold">学習の記録</h2>
         <p>クリア済みレッスン：{lessons.filter((l) => cleared.has(l.code)).length} / {lessons.length}</p>
-        <p>確認テストの平均点：{avg === null ? '－' : `${avg}/10`}</p>
+        <p>確認テストの平均点：{avg === null ? '－' : `${avg} / ${QUIZ_SIZE}`}</p>
       </section>
       <LogoutButton />
     </div>

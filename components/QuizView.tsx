@@ -1,18 +1,16 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { recordQuizAnswer, saveQuizResult } from '@/app/actions'
+import { QUIZ_SIZE } from '@/lib/quiz'
 import type { LessonRow, QuizRow } from '@/lib/types'
 
-const noop = () => () => {}
-
-// 毎回ちがう順番で出題する。サーバーと表示がずれないよう、ブラウザで表示してから抽出する
+// レッスンごとの確認テスト（QUIZ_SIZE 問）を、登録順（id順）に毎回すべて出題する
 export default function QuizView(props: { lesson: Pick<LessonRow, 'code' | 'title'>; questions: QuizRow[] }) {
-  const mounted = useSyncExternalStore(noop, () => true, () => false)
   // Cache Components では、ページを離れても画面（Activity）が隠れるだけで状態が残る。
   // 「もう一度受ける」で戻ってきたとき、前回の最後の問題が表示されたままにならないよう、
-  // 結果画面へ進んだあとに隠れたら key を変えて作り直す（新しい問題でやり直せる）。
+  // 結果画面へ進んだあとに隠れたら key を変えて作り直す（最初の問題からやり直せる）。
   // 途中で離れただけなら、状態はそのまま残す。
   const [round, setRound] = useState(0)
   const finished = useRef(false)
@@ -24,13 +22,12 @@ export default function QuizView(props: { lesson: Pick<LessonRow, 'code' | 'titl
       }
     }
   }, [])
-  return mounted ? <QuizBody key={round} {...props} onFinish={() => { finished.current = true }} /> : <p>問題を読み込み中…</p>
+  return <QuizBody key={round} {...props} onFinish={() => { finished.current = true }} />
 }
 
 function QuizBody({ lesson, questions, onFinish }: { lesson: Pick<LessonRow, 'code' | 'title'>; questions: QuizRow[]; onFinish: () => void }) {
   const router = useRouter()
-  // レッスンの問題からランダムに最大10問
-  const [qs] = useState(() => [...questions].sort(() => Math.random() - 0.5).slice(0, 10))
+  const qs = questions.slice(0, QUIZ_SIZE)
   const [no, setNo] = useState(0)
   const [picked, setPicked] = useState<number | null>(null)
   const [results, setResults] = useState<Record<number, boolean>>({}) // 問題ID → 正解したか

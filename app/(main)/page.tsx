@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { getLessons, getProgress } from '@/lib/db'
+import { QUIZ_SIZE } from '@/lib/quiz'
 
 // S-02 トップページ
 export default function TopPage() {
@@ -25,7 +26,7 @@ async function Top() {
         </div>
         <div className="card text-center">
           <p className="text-sm text-gray-600">確認テストの平均点</p>
-          <p className="mt-1 text-3xl font-bold">{avg === null ? '－' : `${avg}/10`}</p>
+          <p className="mt-1 text-3xl font-bold">{avg === null ? '－' : `${avg} / ${QUIZ_SIZE}`}</p>
         </div>
       </section>
 
@@ -38,7 +39,7 @@ async function Top() {
                 <span className="font-bold">{i + 1}. {l.title}</span>
                 <span className="flex shrink-0 items-center gap-3 text-sm">
                   <span className={`badge ${cleared.has(l.code) ? 'badge-ok' : 'badge-ng'}`}>{cleared.has(l.code) ? 'クリア済み' : '未クリア'}</span>
-                  <span className="w-12 text-right font-mono">{best[l.code] != null ? `${best[l.code]}/10` : '－'}</span>
+                  <span className="w-12 text-right font-mono">{best[l.code] != null ? `${best[l.code]}/${QUIZ_SIZE}` : '－'}</span>
                 </span>
               </Link>
             </li>
