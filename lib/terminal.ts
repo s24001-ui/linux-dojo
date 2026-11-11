@@ -104,24 +104,71 @@ type Env = {
   R: (p: string) => string // cwd から絶対パスへ
   say: (t: string) => void
   err: (t: string) => void
+  stdin: string[] | null // パイプで渡された入力（なければ null）
+  piped: boolean // 出力がパイプで次のコマンドに渡されるか
+}
+
+/* --- ファイルの中身を行ごとに読む道具（head / tail / wc / grep 用） --- */
+const linesOf = (c: string) => (c === '' ? [] : c.replace(/\n$/, '').split('\n'))
+
+function fileLines(e: Env, name: string, cmd: string): string[] | null {
+  const t = e.R(name)
+  if (!exists(e.fs, t)) return e.err(`${cmd}: ${name}: No such file or directory`), null
+  if (isDir(e.fs, t)) return e.err(`${cmd}: ${name}: Is a directory`), null
+  return linesOf(e.fs[t] as string)
+}
+
+// 読む対象。ファイル名があればそのファイル、なければパイプで渡された入力
+function sources(e: Env, files: string[], cmd: string) {
+  if (!files.length) {
+    if (e.stdin) return [{ name: null as string | null, lines: e.stdin }]
+    return e.err(`${cmd}: missing file operand`), null
+  }
+  const out: { name: string | null; lines: string[] }[] = []
+  for (const f of files) {
+    const l = fileLines(e, f, cmd)
+    if (l) out.push({ name: f, lines: l })
+  }
+  return out
+}
+
+// head / tail：-n 3、-n3、-3 のどれでも行数を指定できる（指定なしは10行）
+function headTail(e: Env, cmd: 'head' | 'tail') {
+  let n = 10
+  const files: string[] = []
+  const r = e.rest
+  for (let i = 0; i < r.length; i++) {
+    const a = r[i]
+    if (a === '-n' && /^\d+$/.test(r[i + 1] ?? '')) n = Number(r[++i])
+    else if (/^-n\d+$/.test(a)) n = Number(a.slice(2))
+    else if (/^-\d+$/.test(a)) n = Number(a.slice(1))
+    else if (!a.startsWith('-')) files.push(a)
+  }
+  const srcs = sources(e, files, cmd)
+  if (!srcs) return
+  srcs.forEach((src, i) => {
+    if (srcs.length > 1) {
+      if (i) e.say('')
+      e.say(`==> ${src.name} <==`)
+    }
+    const pick = cmd === 'head' ? src.lines.slice(0, n) : src.lines.slice(Math.max(0, src.lines.length - n))
+    pick.forEach((l) => e.say(l))
+  })
 }
 
 const commands: Record<string, (e: Env) => void> = {
   pwd: (e) => e.say(e.cwd),
 
   echo(e) {
-  const i = e.rest.findIndex((a) => a === '>' || a === '>>')
-  if (i < 0) return e.say(e.rest.join(' '))
-  const append = e.rest[i] === '>>'
-  const target = e.rest[i + 1]
-  if (!target) return e.err('bash: syntax error near unexpected token `newline\'')
-  const t = e.R(target)
-  if (isDir(e.fs, t)) return e.err(`bash: ${target}: Is a directory`)
-  if (!isDir(e.fs, parentOf(t))) return e.err(`bash: ${target}: No such file or directory`)
-  let old = append && isFile(e.fs, t) ? (e.fs[t] as string) : ''
-  if (old && !old.endsWith('\n')) old += '\n'
-  e.fs = { ...e.fs, [t]: old + e.rest.slice(0, i).join(' ') + '\n' }
-},
+    const i = e.rest.indexOf('>')
+    if (i < 0) return e.say(e.rest.join(' '))
+    const target = e.rest[i + 1]
+    if (!target) return e.err('bash: syntax error near unexpected token `newline\'')
+    const t = e.R(target)
+    if (isDir(e.fs, t)) e.err(`bash: ${target}: Is a directory`)
+    else if (!isDir(e.fs, parentOf(t))) e.err(`bash: ${target}: No such file or directory`)
+    else e.fs = { ...e.fs, [t]: e.rest.slice(0, i).join(' ') + '\n' }
+  },
 
   ls(e) {
     const arg = e.args[0]
@@ -137,7 +184,10 @@ const commands: Record<string, (e: Env) => void> = {
         const size = dir ? 4096 : (e.fs[`${t}/${n}`] as string).length
         e.say(`${dir ? 'drwxr-xr-x' : '-rw-r--r--'} 1 student student ${String(size).padStart(4)} Nov  5 10:00 ${n}`)
       }
-    } else if (names.length) e.say(names.join('  '))
+    } else if (names.length) {
+      if (e.piped) names.forEach((n) => e.say(n))
+      else e.say(names.join('  '))
+    }
   },
 
   cd(e) {
@@ -149,7 +199,10 @@ const commands: Record<string, (e: Env) => void> = {
   },
 
   cat(e) {
-    if (!e.args.length) return e.err('cat: missing file operand')
+    if (!e.args.length) {
+      if (e.stdin) return e.stdin.forEach((l) => e.say(l))
+      return e.err('cat: missing file operand')
+    }
     for (const a of e.args) {
       const t = e.R(a)
       if (!exists(e.fs, t)) e.err(`cat: ${a}: No such file or directory`)
@@ -193,6 +246,72 @@ const commands: Record<string, (e: Env) => void> = {
     }
   },
 
+  head: (e) => headTail(e, 'head'),
+  tail: (e) => headTail(e, 'tail'),
+
+  // 行数・単語数・バイト数。-l -w -c で1つだけ表示
+  wc(e) {
+    const srcs = sources(e, e.args, 'wc')
+    if (!srcs) return
+    const all = !/[lwc]/.test(e.flags)
+    const rows = srcs.map((src) => {
+      const text = src.lines.join('\n')
+      const cols: number[] = []
+      if (all || e.flags.includes('l')) cols.push(src.lines.length)
+      if (all || e.flags.includes('w')) cols.push(text.split(/\s+/).filter(Boolean).length)
+      if (all || e.flags.includes('c')) cols.push(new TextEncoder().encode(text + (src.lines.length ? '\n' : '')).length)
+      return { cols, name: src.name }
+    })
+    if (rows.length > 1) rows.push({ cols: rows[0].cols.map((_, i) => rows.reduce((a, r) => a + r.cols[i], 0)), name: 'total' })
+    for (const r of rows) e.say([...r.cols.map((c) => (all ? String(c).padStart(2) : String(c))), r.name].filter((x) => x !== null).join(' '))
+  },
+
+  // 文字を探す。-i 大小無視 / -n 行番号 / -c 件数 / -v 含まない行
+  grep(e) {
+    const [pattern, ...files] = e.args
+    if (pattern === undefined) return e.err('Usage: grep [OPTION]... PATTERNS [FILE]...')
+    const flag = e.flags.includes('i') ? 'i' : ''
+    let re: RegExp
+    try {
+      re = new RegExp(pattern, flag)
+    } catch {
+      re = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flag)
+    }
+    const srcs = sources(e, files, 'grep')
+    if (!srcs) return
+    for (const src of srcs) {
+      const label = srcs.length > 1 && src.name ? `${src.name}:` : ''
+      let count = 0
+      src.lines.forEach((l, i) => {
+        if (re.test(l) === e.flags.includes('v')) return
+        count++
+        if (!e.flags.includes('c')) e.say(`${label}${e.flags.includes('n') ? `${i + 1}:` : ''}${l}`)
+      })
+      if (e.flags.includes('c')) e.say(`${label}${count}`)
+    }
+  },
+
+  // ファイルを名前で探す。find [場所] -name "パターン" [-type f|d]
+  find(e) {
+    const r = e.rest
+    const start = r[0] && !r[0].startsWith('-') ? r[0] : '.'
+    let name: string | null = null
+    let type: string | null = null
+    for (let i = start === r[0] ? 1 : 0; i < r.length; i++) {
+      if (r[i] === '-name') name = r[++i] ?? null
+      else if (r[i] === '-type') type = r[++i] ?? null
+    }
+    const root = e.R(start)
+    if (!exists(e.fs, root)) return e.err(`find: ‘${start}’: No such file or directory`)
+    const re = name === null ? null : new RegExp('^' + name.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$')
+    const walk = (abs: string, shown: string) => {
+      const dir = isDir(e.fs, abs)
+      if ((!re || re.test(baseOf(shown))) && (!type || (type === 'd') === dir)) e.say(shown)
+      if (dir) for (const n of childrenOf(e.fs, abs)) walk(`${abs === '/' ? '' : abs}/${n}`, `${shown.replace(/\/$/, '')}/${n}`)
+    }
+    walk(root, start)
+  },
+
   cp: (e) => copyMove(e, 'cp'),
   mv: (e) => copyMove(e, 'mv'),
 }
@@ -226,7 +345,45 @@ export function tokenize(input: string): string[] {
 
 export type Result = { state: TermState; out: Line[]; clear?: boolean; error?: boolean }
 
+// 「|」で区切る（引用符 "" '' の中の | は区切りにしない）
+export function splitPipes(input: string): string[] {
+  const parts: string[] = ['']
+  let quote = ''
+  for (const ch of input) {
+    if (quote) {
+      if (ch === quote) quote = ''
+    } else if (ch === '"' || ch === "'") quote = ch
+    else if (ch === '|') {
+      parts.push('')
+      continue
+    }
+    parts[parts.length - 1] += ch
+  }
+  return parts
+}
+
+// 入力1行を実行する。「|」があれば、左のコマンドの出力を右のコマンドの入力に渡していく
 export function exec(state: TermState, input: string): Result {
+  if (!input.trim()) return { state, out: [] }
+  const stages = splitPipes(input)
+  if (stages.length === 1) return runStage(state, input, null, false)
+  if (stages.some((x) => !x.trim())) return { state, out: [{ kind: 'err', text: "bash: syntax error near unexpected token `|'" }], error: true }
+
+  let st = state
+  let stdin: string[] | null = null
+  const side: Line[] = [] // 途中のエラーや解説は、そのまま表示する
+  let last: Result = { state, out: [] }
+  stages.forEach((cmd, i) => {
+    last = runStage(st, cmd, stdin, i < stages.length - 1)
+    st = { fs: last.state.fs, cwd: state.cwd } // パイプの途中で cd しても、現在地は変わらない
+    stdin = last.out.filter((l) => l.kind === 'out').map((l) => l.text)
+    if (i < stages.length - 1) side.push(...last.out.filter((l) => l.kind !== 'out'))
+  })
+  const l: Result = last
+  return { state: st, out: [...side, ...l.out], error: l.error || side.some((x) => x.kind === 'err') }
+}
+
+function runStage(state: TermState, input: string, stdin: string[] | null, piped: boolean): Result {
   const out: Line[] = []
   let error = false
   const [cmd, ...rest] = tokenize(input)
@@ -240,6 +397,8 @@ export function exec(state: TermState, input: string): Result {
     args: rest.filter((a) => !/^-[A-Za-z]+$/.test(a)),
     flags: rest.filter((a) => /^-[A-Za-z]+$/.test(a)).map((a) => a.slice(1)).join(''),
     R: (p) => resolve(state.cwd, p),
+    stdin,
+    piped,
     say: (text) => out.push({ kind: 'out', text }),
     err(text) {
       error = true

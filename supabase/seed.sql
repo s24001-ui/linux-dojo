@@ -279,3 +279,111 @@ where not exists (select 1 from questions where question_type = 'scenario' and t
 insert into questions (question_type, command_tag, title, body, setup_data)
 select 'scenario', $s$mv$s$, $s$名前をそろえて整理しよう$s$, $s$ファイル名が揃っていません。notes フォルダにまとめ、移すときに名前も直しましょう（Memo.txt → memo.txt、todo.text → todo.txt）。$s$, $j${"summary": "移動しながら、ファイル名も正しく直す", "commands": "mkdir / mv", "fs": {"files": {"Memo.txt": "メモ", "todo.text": "やること"}}, "goals": [{"label": "notes フォルダを作る", "hints": ["フォルダを作るコマンドは？", "mkdir のあとに、フォルダ名を書きます。", "mkdir notes"], "dirs": ["notes"]}, {"label": "Memo.txt を notes/memo.txt として移動する", "hints": ["移動は mv を使います。名前を変えながら移動もできます。", "移動先にファイル名まで書くと、移動と同時に名前が変わります。", "mv Memo.txt notes/memo.txt"], "files": ["notes/memo.txt"], "absent": ["Memo.txt"]}, {"label": "todo.text を notes/todo.txt として移動する", "hints": ["さっきと同じ要領です。", "移動先に、新しい名前（todo.txt）まで書きます。", "mv todo.text notes/todo.txt"], "files": ["notes/todo.txt"], "absent": ["todo.text"]}], "checks": [{"files": ["notes/memo.txt", "notes/todo.txt"], "absent": ["Memo.txt", "todo.text", "notes/Memo.txt", "notes/todo.text"]}]}$j$::jsonb
 where not exists (select 1 from questions where question_type = 'scenario' and title = $s$名前をそろえて整理しよう$s$);
+-- 新しいレッスンの追加：head・tail・wc／grep・find／パイプ、と、レッスンの並び順の変更
+-- seed.sql の末尾（$seed2$; の下）に貼り付けるか、SQL Editor で単独で実行する。何度実行しても壊れない。
+-- ※先に lib/terminal.ts（head・tail・wc・grep・find・パイプ対応版）を反映しておくこと。
+--
+-- 並び順（sort_order は10刻み。あとから間に挿入できる）
+--   10 ls / 20 cd / 30 mkdir / 40 cat / 50 head（新）/ 60 echo / 70 cp / 80 mv / 90 rm / 100 grep（新）/ 110 pipe（新）
+ 
+-- ========== 既存レッスンの並び順 ==========
+update lessons set sort_order = v.n
+from (values ('ls',10),('cd',20),('mkdir',30),('cat',40),('echo',60),('cp',70),('mv',80),('rm',90)) as v(code, n)
+where lessons.code = v.code;
+ 
+-- ========== head ==========
+insert into lessons (code, title, sort_order, category) values ($s$head$s$, $s$中身の一部を見よう（head・tail・wc）$s$, 50, $s$テキスト操作$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$head$s$), 1, $s$head log.txt で、log.txt の先頭の部分を表示してみましょう。$s$, $s$head は、ファイルの先頭から表示します。行数を指定しないと、10行まで表示されます。$s$, $j${"commands": ["^head\\s+log\\.txt$"]}$j$::jsonb, $j${"files": {"log.txt": "起動しました\nログインしました\nファイルを開きました\nファイルを保存しました\nエラーが発生しました\n終了しました", "todo.txt": "牛乳を買う\n宿題をする\n部屋を掃除する"}}$j$::jsonb)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$head$s$), 2, $s$head -n 2 log.txt で、先頭の2行だけを表示しましょう。$s$, $s$「-n 数字」で、表示する行数を指定できます。$s$, $j${"commands": ["^head\\s+(-n\\s*2|-2)\\s+log\\.txt$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$head$s$), 3, $s$tail -n 2 log.txt で、末尾の2行だけを表示しましょう。$s$, $s$tail は、ファイルの末尾から表示します。ログの「最新の様子」を見るときによく使います。$s$, $j${"commands": ["^tail\\s+(-n\\s*2|-2)\\s+log\\.txt$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$head$s$), 4, $s$wc -l todo.txt で、todo.txt の行数を数えましょう。$s$, $s$wc は word count の略です。-l（lines）をつけると、行数だけを数えます。$s$, $j${"commands": ["^wc\\s+-l\\s+todo\\.txt$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+ 
+-- ========== grep ==========
+insert into lessons (code, title, sort_order, category) values ($s$grep$s$, $s$探してみよう（grep・find）$s$, 100, $s$テキスト操作$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$grep$s$), 1, $s$grep banana fruits.txt で、banana を含む行だけを表示しましょう。$s$, $s$grep のあとに「探す文字」「ファイル名」の順で書きます。$s$, $j${"commands": ["^grep\\s+banana\\s+fruits\\.txt$"]}$j$::jsonb, $j${"files": {"fruits.txt": "apple\nbanana\nApple pie\ncherry\nbanana split", "app.log": "start\nerror: disk full\nok\nerror: timeout\nend", "documents/report.txt": "売上報告", "documents/notes.txt": "買い物メモ", "photos/a.jpg": "", "photos/b.png": ""}}$j$::jsonb)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$grep$s$), 2, $s$grep -i apple fruits.txt で、大文字と小文字を区別せずに探しましょう。$s$, $s$-i は ignore case の略です。apple も Apple も見つかります。$s$, $j${"commands": ["^grep\\s+-\\w*i\\w*\\s+apple\\s+fruits\\.txt$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$grep$s$), 3, $s$grep -n error app.log で、行番号つきで error を探しましょう。$s$, $s$-n をつけると、見つかった行の番号も表示されます。$s$, $j${"commands": ["^grep\\s+-\\w*n\\w*\\s+error\\s+app\\.log$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$grep$s$), 4, $s$find . -name "*.txt" で、名前が .txt で終わるファイルを探しましょう。$s$, $s$find のあとに「どこから探すか」を書き、-name で名前を指定します。「.」はいまのフォルダ、「*」はどんな文字にもあてはまります。$s$, $j${"commands": ["^find\\s+\\.\\s+-name\\s+[\"']?\\*\\.txt[\"']?$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$grep$s$), 5, $s$find documents -name "*.txt" で、documents フォルダの中だけを探しましょう。$s$, $s$「どこから探すか」に、フォルダ名を書くと、そのフォルダの中だけを探します。$s$, $j${"commands": ["^find\\s+documents/?\\s+-name\\s+[\"']?\\*\\.txt[\"']?$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+ 
+-- ========== pipe ==========
+insert into lessons (code, title, sort_order, category) values ($s$pipe$s$, $s$つなげてみよう（パイプ）$s$, 110, $s$テキスト操作$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$pipe$s$), 1, $s$ls | wc -l で、フォルダの中にあるファイルとフォルダの数を数えましょう。$s$, $s$「|」（パイプ）は、左のコマンドの出力を、右のコマンドに渡します。ls の結果を、wc -l が数えます。$s$, $j${"commands": ["^ls\\s*\\|\\s*wc\\s+-l$"]}$j$::jsonb, $j${"files": {"app.log": "start\nerror: disk full\nok\nerror: timeout\nend", "memo.txt": "あとで読む", "documents/report.txt": "売上報告", "documents/notes.txt": "買い物メモ", "photos/a.jpg": "", "photos/b.png": ""}}$j$::jsonb)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$pipe$s$), 2, $s$cat app.log | grep error で、app.log の中から error の行だけを取り出しましょう。$s$, $s$cat が表示した中身を、grep に渡して、error を含む行だけに絞ります。$s$, $j${"commands": ["^cat\\s+app\\.log\\s*\\|\\s*grep\\s+error$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$pipe$s$), 3, $s$grep error app.log | wc -l で、error の行が何行あるか数えましょう。$s$, $s$grep で絞った結果を、wc -l に渡すと、行数を数えられます。$s$, $j${"commands": ["^grep\\s+error\\s+app\\.log\\s*\\|\\s*wc\\s+-l$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$pipe$s$), 4, $s$find . -name "*.txt" | wc -l で、.txt のファイルが全部で何個あるか数えましょう。$s$, $s$find で見つけたファイルの一覧を、wc -l に渡すと、個数を数えられます。$s$, $j${"commands": ["^find\\s+\\.\\s+-name\\s+[\"']?\\*\\.txt[\"']?\\s*\\|\\s*wc\\s+-l$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+ 
+-- ========== 確認テスト（各5問）==========
+-- 3つのレッスンのどれかに確認テストがすでにあれば、何もしない（二重に入らない）
+do $seed3$
+begin
+  if exists (select 1 from questions where question_type = 'quiz' and lesson_id in (select id from lessons where code in ($s$head$s$, $s$grep$s$, $s$pipe$s$))) then return; end if;
+ 
+  -- head
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$head$s$), 'quiz', $s$head$s$, $s$ファイルの先頭の数行だけを表示するコマンドはどれ？$s$, $j$["head", "tail", "top", "first"]$j$::jsonb, 0, $s$head は、ファイルの先頭から表示します。行数を指定しないと、10行まで表示されます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$head$s$), 'quiz', $s$tail$s$, $s$ファイル log.txt の末尾の2行だけを表示するコマンドはどれ？$s$, $j$["head -n 2 log.txt", "tail -n 2 log.txt", "tail 2 log.txt", "cat -2 log.txt"]$j$::jsonb, 1, $s$tail は末尾から表示します。「-n 2」で、表示する行数を2行に指定します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$head$s$), 'quiz', $s$head$s$, $s$head -n 3 log.txt を実行すると、何が表示される？$s$, $j$["末尾の3行", "先頭の3行", "3文字だけ", "3番目の行だけ"]$j$::jsonb, 1, $s$head は先頭から表示します。「-n 3」で、先頭の3行までを表示します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$head$s$), 'quiz', $s$wc$s$, $s$ファイルの行数を数えるコマンドはどれ？$s$, $j$["wc -l", "wc -w", "count log.txt", "ls -l"]$j$::jsonb, 0, $s$wc は word count の略で、-l（lines）をつけると行数を数えます。-w は単語数です。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$head$s$), 'quiz', $s$tail$s$, $s$ログファイルの「最新の数行」を見たいとき、よく使うのはどれ？$s$, $j$["head", "tail", "wc", "cat -h"]$j$::jsonb, 1, $s$ログは新しい出来事が末尾に追加されるので、末尾を見る tail がよく使われます。$s$);
+ 
+  -- grep
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$grep$s$), 'quiz', $s$grep$s$, $s$ファイルの中から、特定の文字を含む行だけを表示するコマンドはどれ？$s$, $j$["find", "grep", "cat", "ls"]$j$::jsonb, 1, $s$grep は、ファイルの中身から文字を探して、その行を表示します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$grep$s$), 'quiz', $s$grep$s$, $s$grep -i の「-i」は、何を表す？$s$, $j$["大文字と小文字を区別しない", "行番号を表示する", "逆順に表示する", "隠しファイルも探す"]$j$::jsonb, 0, $s$-i は ignore case の略です。Apple も apple も同じものとして探します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$grep$s$), 'quiz', $s$grep$s$, $s$grep -n error app.log を実行すると、通常の表示に加えて何が出る？$s$, $j$["ファイルの更新日時", "見つかった行の行番号", "見つかった行の数だけ", "ファイルの大きさ"]$j$::jsonb, 1, $s$-n（number）をつけると、見つかった行の行番号が先頭に表示されます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$grep$s$), 'quiz', $s$find$s$, $s$いまのフォルダの中から、名前が .txt で終わるファイルを探すコマンドはどれ？$s$, $j$["grep .txt", "find . -name \"*.txt\"", "ls *.txt -r", "cat *.txt"]$j$::jsonb, 1, $s$find は、ファイルを名前で探します。「.」はいまのフォルダ、「*」はどんな文字にもあてはまります。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$grep$s$), 'quiz', $s$find$s$, $s$find documents -name "*.txt" の「documents」は、何を表す？$s$, $j$["探す場所（ここから探す）", "探す文字", "探すファイルの名前", "結果の保存先"]$j$::jsonb, 0, $s$find のあとの最初の指定は「どこから探すか」です。この場合は documents フォルダの中を探します。$s$);
+ 
+  -- pipe
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$pipe$s$), 'quiz', $s$pipe$s$, $s$「|」（パイプ）の役割はどれ？$s$, $j$["左のコマンドの出力を、右のコマンドに渡す", "ファイルに書き込む", "コマンドを2回実行する", "直前のコマンドを取り消す"]$j$::jsonb, 0, $s$パイプは、左のコマンドの出力を、右のコマンドの入力として渡します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$pipe$s$), 'quiz', $s$pipe$s$, $s$フォルダの中にあるファイルの数を数える、正しい書き方はどれ？$s$, $j$["ls | wc -l", "wc -l | ls", "ls > wc -l", "ls & wc -l"]$j$::jsonb, 0, $s$ls の出力（一覧）を、パイプで wc -l に渡すと、行数（＝個数）を数えられます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$pipe$s$), 'quiz', $s$pipe$s$, $s$cat app.log | grep error は、何をする？$s$, $j$["app.log を削除する", "app.log の中の error を含む行だけを表示する", "app.log に error と書き込む", "error という名前のファイルを探す"]$j$::jsonb, 1, $s$cat が出した中身を、grep が error を含む行だけに絞って表示します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$pipe$s$), 'quiz', $s$pipe$s$, $s$grep error app.log | wc -l は、何を数える？$s$, $j$["app.log の全部の行数", "error を含む行の数", "error という文字の数", "ファイルの数"]$j$::jsonb, 1, $s$grep で error を含む行だけに絞ってから、wc -l で、その行数を数えます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$pipe$s$), 'quiz', $s$pipe$s$, $s$「>」と「|」の違いとして、正しいのはどれ？$s$, $j$["「>」は出力をファイルへ、「|」は出力を次のコマンドへ渡す", "どちらもファイルに書き込む", "「>」は追記、「|」は上書き", "違いはない"]$j$::jsonb, 0, $s$「>」は出力をファイルに書き込み、「|」は出力を次のコマンドに渡します。$s$);
+ 
+end
+$seed3$;
+ 
