@@ -242,3 +242,40 @@ begin
     values ((select id from lessons where code=$s$rm$s$), 'quiz', $s$rm$s$, $s$a.txt と b.txt を、1つのコマンドでまとめて削除するにはどう書く？$s$, $j$["rm a.txt b.txt", "rm a.txt,b.txt", "rm a.txt && b.txt", "rm -2 a.txt b.txt"]$j$::jsonb, 0, $s$rm のあとに、ファイル名を半角スペースで区切って並べると、まとめて削除できます。$s$);
 end
 $seed2$;
+-- ========== エラー修復ミッション ==========
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$cp$s$, $s$フォルダがコピーできない$s$, $s$documents フォルダを backup にコピーしようとしたら、エラーが出ました。$s$, $j${"fs": {"files": {"documents/report.txt": "レポート", "documents/memo.txt": "メモ"}}, "error": {"cmd": "cp documents backup", "msg": "cp: -r not specified; omitting directory 'documents'"}, "hints": ["エラーは「フォルダは、そのままではコピーできない」という意味です。", "フォルダを中身ごとコピーするには、オプションを1つ足します。", "cp -r documents backup を実行しましょう。（-r は recursive：中身ごと）"], "checks": [{"files": ["backup/report.txt", "backup/memo.txt", "documents/report.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$フォルダがコピーできない$s$);
+ 
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$rm$s$, $s$フォルダが消せない$s$, $s$temp フォルダを削除しようとしたら、エラーが出ました。$s$, $j${"fs": {"files": {"temp/a.txt": "一時ファイル", "temp/b.txt": "一時ファイル", "memo.txt": "残すメモ"}}, "error": {"cmd": "rm temp", "msg": "rm: cannot remove 'temp': Is a directory"}, "hints": ["エラーは「temp はフォルダなので、そのままでは消せない」という意味です。", "フォルダは、中身ごと消す指定が必要です。", "rm -r temp を実行しましょう。（消したものは戻せません。memo.txt は消さないこと）"], "checks": [{"absent": ["temp", "temp/a.txt", "temp/b.txt"], "files": ["memo.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$フォルダが消せない$s$);
+ 
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$touch$s$, $s$ファイルが作れない$s$, $s$work/notes.txt を作ろうとしたら、エラーが出ました。$s$, $j${"fs": {}, "error": {"cmd": "touch work/notes.txt", "msg": "touch: cannot touch 'work/notes.txt': No such file or directory"}, "hints": ["エラーは「work/notes.txt を作れない」という意味です。", "touch はファイルを作るコマンドで、フォルダは作れません。work フォルダがまだありません。", "mkdir work でフォルダを作ってから、もう一度 touch work/notes.txt を実行しましょう。"], "checks": [{"dirs": ["work"], "files": ["work/notes.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$ファイルが作れない$s$);
+ 
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$cd$s$, $s$フォルダ名の綴りが違う$s$, $s$documents フォルダへ移動しようとしたら、エラーが出ました。$s$, $j${"fs": {"dirs": ["work"], "files": {"documents/report.txt": "レポート"}}, "error": {"cmd": "cd documnts", "msg": "bash: cd: documnts: No such file or directory"}, "hints": ["エラーは「documnts というフォルダがない」という意味です。", "入力した名前をよく見てください。綴りが違います。ls で、正しい名前を確認できます。", "cd documents を実行しましょう。"], "checks": [{"cwd": "~/documents"}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$フォルダ名の綴りが違う$s$);
+ 
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$mkdir$s$, $s$同じ名前がもうある$s$, $s$project フォルダを作ろうとしたら、エラーが出ました。$s$, $j${"fs": {"files": {"project/readme.txt": "はじめに"}}, "error": {"cmd": "mkdir project", "msg": "mkdir: cannot create directory ‘project’: File exists"}, "hints": ["エラーは「project はすでにある」という意味です。", "作り直す必要はありません。すでにある project フォルダの中に入りましょう。", "cd project を実行しましょう。"], "checks": [{"cwd": "~/project"}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$同じ名前がもうある$s$);
+ 
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$mv$s$, $s$移動先が足りない$s$, $s$a.txt を documents フォルダへ移動しようとしたら、エラーが出ました。$s$, $j${"fs": {"dirs": ["documents"], "files": {"a.txt": "a"}}, "error": {"cmd": "mv a.txt", "msg": "mv: missing destination file operand after 'a.txt'"}, "hints": ["エラーは「移動先が書かれていない」という意味です。", "mv は「mv 移動するもの 移動先」のように、2つ指定する必要があります。", "mv a.txt documents を実行しましょう。"], "checks": [{"files": ["documents/a.txt"], "absent": ["a.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$移動先が足りない$s$);
+ 
+-- ========== シナリオ ==========
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'scenario', $s$mkdir$s$, $s$プロジェクトの土台を作ろう$s$, $s$新しいアプリ myapp の作業を始めます。フォルダとファイルで、プロジェクトの骨組みを作りましょう。$s$, $j${"summary": "フォルダとファイルで、プロジェクトの骨組みを作る", "commands": "mkdir -p / touch", "fs": {}, "goals": [{"label": "myapp/src と myapp/docs フォルダを作る", "hints": ["フォルダを作るコマンドは？ 親の myapp も、まだありません。", "mkdir -p を使うと、親のフォルダもまとめて作れます。", "mkdir -p myapp/src / mkdir -p myapp/docs"], "dirs": ["myapp/src", "myapp/docs"]}, {"label": "myapp/README.txt を作る", "hints": ["空のファイルを作るコマンドは？", "touch のあとに、ファイルのパスを書きます。", "touch myapp/README.txt"], "files": ["myapp/README.txt"]}, {"label": "myapp/src/main.txt を作る", "hints": ["さっきと同じコマンドを使います。", "touch のあとに、フォルダ名から続けて書きます。", "touch myapp/src/main.txt"], "files": ["myapp/src/main.txt"]}], "checks": [{"dirs": ["myapp/src", "myapp/docs"], "files": ["myapp/README.txt", "myapp/src/main.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'scenario' and title = $s$プロジェクトの土台を作ろう$s$);
+ 
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'scenario', $s$mv$s$, $s$ログを整理しよう$s$, $s$logs フォルダが散らかってきました。使うログは archive フォルダへ移し、古い old.log は削除しましょう。$s$, $j${"summary": "ログを保管用フォルダに移し、古いものを消す", "commands": "mkdir / mv / rm", "fs": {"files": {"logs/app.log": "起動しました", "logs/error.log": "エラーなし", "logs/old.log": "古いログ"}}, "goals": [{"label": "logs/archive フォルダを作る", "hints": ["フォルダを作るコマンドは？", "mkdir のあとに、フォルダのパスを書きます。", "mkdir logs/archive"], "dirs": ["logs/archive"]}, {"label": "app.log と error.log を logs/archive に移動する", "hints": ["移動は mv を使います。1つずつ実行します。", "mv は「mv 移動するもの 移動先」の順です。", "mv logs/app.log logs/archive / mv logs/error.log logs/archive"], "files": ["logs/archive/app.log", "logs/archive/error.log"], "absent": ["logs/app.log", "logs/error.log"]}, {"label": "old.log を削除する", "hints": ["削除は rm を使います。", "rm のあとに、消したいファイルのパスを書きます。", "rm logs/old.log"], "absent": ["logs/old.log"]}], "checks": [{"files": ["logs/archive/app.log", "logs/archive/error.log"], "absent": ["logs/app.log", "logs/error.log", "logs/old.log", "logs/archive/old.log"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'scenario' and title = $s$ログを整理しよう$s$);
+ 
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'scenario', $s$mv$s$, $s$名前をそろえて整理しよう$s$, $s$ファイル名が揃っていません。notes フォルダにまとめ、移すときに名前も直しましょう（Memo.txt → memo.txt、todo.text → todo.txt）。$s$, $j${"summary": "移動しながら、ファイル名も正しく直す", "commands": "mkdir / mv", "fs": {"files": {"Memo.txt": "メモ", "todo.text": "やること"}}, "goals": [{"label": "notes フォルダを作る", "hints": ["フォルダを作るコマンドは？", "mkdir のあとに、フォルダ名を書きます。", "mkdir notes"], "dirs": ["notes"]}, {"label": "Memo.txt を notes/memo.txt として移動する", "hints": ["移動は mv を使います。名前を変えながら移動もできます。", "移動先にファイル名まで書くと、移動と同時に名前が変わります。", "mv Memo.txt notes/memo.txt"], "files": ["notes/memo.txt"], "absent": ["Memo.txt"]}, {"label": "todo.text を notes/todo.txt として移動する", "hints": ["さっきと同じ要領です。", "移動先に、新しい名前（todo.txt）まで書きます。", "mv todo.text notes/todo.txt"], "files": ["notes/todo.txt"], "absent": ["todo.text"]}], "checks": [{"files": ["notes/memo.txt", "notes/todo.txt"], "absent": ["Memo.txt", "todo.text", "notes/Memo.txt", "notes/todo.text"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'scenario' and title = $s$名前をそろえて整理しよう$s$);
