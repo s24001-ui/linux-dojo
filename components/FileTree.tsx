@@ -21,7 +21,7 @@ export default function FileTree({ fs, cwd, diff = null, className = '' }: { fs:
   const rows: { path: string; name: string; depth: number; dir: boolean }[] = []
   const walk = (dir: string, depth: number) => {
     Object.keys(all)
-      .filter((k) => k !== '/' && k.replace(/\/[^/]*$/, '') === dir)
+      .filter((k) => k !== '/' && !k.includes('/.git/') && k.replace(/\/[^/]*$/, '') === dir) // .git の中身は見せない
       .sort((a, b) => Number(all[b] === null) - Number(all[a] === null) || a.localeCompare(b))
       .forEach((k) => {
         rows.push({ path: k, name: k.split('/').pop()!, depth, dir: all[k] === null })

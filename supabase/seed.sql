@@ -386,4 +386,93 @@ begin
  
 end
 $seed3$;
+
+insert into lessons (code, title, sort_order, category) values ($s$git-init$s$, $s$リポジトリを作ってみよう（git init・status）$s$, 9, $s$Git$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+insert into lessons (code, title, sort_order, category) values ($s$git-commit$s$, $s$記録してみよう（git add・commit）$s$, 10, $s$Git$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+insert into lessons (code, title, sort_order, category) values ($s$git-log$s$, $s$履歴と変更を見てみよう（git log・diff）$s$, 11, $s$Git$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
  
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$git-init$s$), 1, $s$git status を実行して、いまのフォルダが git のリポジトリかどうか確かめましょう。$s$, $s$git status と入力します。まだリポジトリではないので、エラーが出ても大丈夫です。$s$, $j${"commands":["^git\\s+status$"]}$j$::jsonb, $j${"dirs":["project"],"cwd":"~/project"}$j$::jsonb)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$git-init$s$), 2, $s$git init で、このフォルダを git のリポジトリにしましょう。$s$, $s$git init と入力します。「Initialized empty Git repository」と出れば成功です。$s$, $j${"dirs":["project/.git"],"commands":["^git\\s+init$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$git-init$s$), 3, $s$ls -a で、できあがった .git フォルダを確かめましょう。$s$, $s$.git は隠しフォルダなので、ls だけでは見えません。-a をつけます。$s$, $j${"commands":["^ls\\s+-\\w*a"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$git-init$s$), 4, $s$echo hello > hello.txt でファイルを作り、git status で状態を確かめましょう。$s$, $s$1つ目のコマンドでファイルを作り、2つ目の git status で「Untracked files」（まだ記録していないファイル）と出ることを確かめます。$s$, $j${"files":["project/hello.txt"],"commands":["^git\\s+status$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$git-commit$s$), 1, $s$git add hello.txt で、hello.txt をコミット（記録）の対象に入れましょう。$s$, $s$git add のあとに、記録したいファイル名を入力します。この「コミットの対象に入れる場所」をステージと呼びます。$s$, $j${"commands":["^git\\s+add\\s+(hello\\.txt|\\.|-A|--all)$"]}$j$::jsonb, $j${"files":{"project/.git/HEAD":"ref: refs/heads/main\n","project/.git/index":"{}","project/.git/commits":"[]","project/hello.txt":"hello\n"},"cwd":"~/project"}$j$::jsonb)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$git-commit$s$), 2, $s$git status で、hello.txt が「Changes to be committed」（コミットの対象）になったことを確かめましょう。$s$, $s$git status と入力します。「new file: hello.txt」と出ます。$s$, $j${"commands":["^git\\s+status$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$git-commit$s$), 3, $s$git commit -m "first commit" で、変更を記録しましょう。$s$, $s$-m のあとに、記録の説明（メッセージ）を引用符で囲んで書きます。メッセージは自由です。$s$, $j${"commands":["^git\\s+commit\\s+-a?m\\s+.+"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$git-commit$s$), 4, $s$git status で、記録したあとは「nothing to commit, working tree clean」（変更なし）になることを確かめましょう。$s$, $s$git status と入力します。記録していない変更がなくなったので、Untracked や Changes は出ません。$s$, $j${"commands":["^git\\s+status$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$git-log$s$), 1, $s$git log で、これまでのコミット（記録）の履歴を見ましょう。$s$, $s$git log と入力します。コミットの ID、作者、日時、メッセージが出ます。$s$, $j${"commands":["^git\\s+log$"]}$j$::jsonb, $j${"files":{"project/.git/HEAD":"ref: refs/heads/main\n","project/.git/index":"{\"hello.txt\":\"hello\\n\"}","project/.git/commits":"[{\"id\":\"6da9083f57d50af6da73badb13d347801806e065\",\"msg\":\"first commit\",\"date\":\"Mon Nov 9 10:00:00 2026 +0900\",\"tree\":{\"hello.txt\":\"hello\\n\"}}]","project/hello.txt":"hello\n"},"cwd":"~/project"}$j$::jsonb)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$git-log$s$), 2, $s$echo world >> hello.txt で hello.txt に1行書き足し、git diff で変更した部分を確かめましょう。$s$, $s$「+」で始まる行が、追加された行です。「-」は削除された行です。$s$, $j${"commands":["^echo\\s+.+>>\\s*hello\\.txt$","^git\\s+diff$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$git-log$s$), 3, $s$git add hello.txt と git commit -m "add world" で、この変更を記録しましょう。$s$, $s$先に git add でステージに入れてから、git commit -m で記録します。メッセージは自由です。$s$, $j${"commands":["^git\\s+add\\s+(hello\\.txt|\\.|-A|--all)$","^git\\s+commit\\s+-a?m\\s+.+"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$git-log$s$), 4, $s$git log --oneline で、履歴を1行ずつの短い形で見ましょう。$s$, $s$--oneline をつけると、1つのコミットが1行で表示されます。$s$, $j${"commands":["^git\\s+log\\s+--oneline$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+
+do $seed4$
+begin
+  if exists (
+    select 1 from questions
+    where question_type = 'quiz'
+      and lesson_id in (select id from lessons where code in ($s$git-init$s$, $s$git-commit$s$, $s$git-log$s$))
+  ) then return; end if;
+ 
+  -- ========== git-init ==========
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-init$s$), 'quiz', $s$git init$s$, $s$git init の役割として、正しいのはどれ？$s$, $j$["ファイルを削除する","変更を記録（コミット）する","ファイルの中身を表示する","フォルダを git で管理できるリポジトリにする"]$j$::jsonb, 3, $s$git init は、いまのフォルダを git のリポジトリにします。これで、変更の履歴を残せるようになります。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-init$s$), 'quiz', $s$git init$s$, $s$git init を実行すると、フォルダの中に作られるものはどれ？$s$, $j$["git","repo",".git",".github"]$j$::jsonb, 2, $s$.git フォルダに、履歴などの情報が保存されます。このフォルダを消すと、リポジトリではなくなります。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-init$s$), 'quiz', $s$ls$s$, $s$.git フォルダが、ls だけでは表示されないのはなぜ？$s$, $j$["削除されているから","「.」で始まる隠しフォルダだから","中身が空だから","ls が git に対応していないから"]$j$::jsonb, 1, $s$名前が「.」で始まるものは隠しフォルダ・隠しファイルです。ls -a をつけると表示されます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-init$s$), 'quiz', $s$git status$s$, $s$git status の「Untracked files」は、どんなファイルのこと？$s$, $j$["エラーが出たファイル","削除されたファイル","まだ git に記録（追跡）されていない新しいファイル","コミット済みのファイル"]$j$::jsonb, 2, $s$Untracked は「追跡されていない」という意味です。git add で追加すると、git が管理するようになります。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-init$s$), 'quiz', $s$git status$s$, $s$git init をしていないフォルダで git status を実行すると、どうなる？$s$, $j$["fatal: not a git repository というエラーが出る","何も表示されない","自動で git init が実行される","すべてのファイルが Untracked と表示される"]$j$::jsonb, 0, $s$リポジトリではないフォルダでは、「not a git repository」というエラーになります。先に git init をしましょう。$s$);
+ 
+  -- ========== git-commit ==========
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-commit$s$), 'quiz', $s$git add$s$, $s$git add の役割として、正しいのはどれ？$s$, $j$["ファイルをコミットの対象（ステージ）に加える","ファイルを削除する","履歴を表示する","リポジトリを作る"]$j$::jsonb, 0, $s$git add は、次のコミットに含めるファイルを選んで、ステージに置きます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-commit$s$), 'quiz', $s$git commit$s$, $s$git add と git commit の違いとして、正しいのはどれ？$s$, $j$["add はファイルを削除し、commit はコピーする","add は記録するファイルを選び、commit で記録を確定する","add は履歴を見て、commit は変更を見る","違いはない"]$j$::jsonb, 1, $s$流れは「編集 → git add（選ぶ）→ git commit（記録）」です。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-commit$s$), 'quiz', $s$git commit$s$, $s$git commit -m の「-m」は、何を指定するオプション？$s$, $j$["移動（move）","結合（merge）","複数（multiple）のファイルを対象にする","コミットメッセージ（message）をその場で書く"]$j$::jsonb, 3, $s$-m のあとに、記録の説明（メッセージ）を書きます。例：git commit -m "first commit"$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-commit$s$), 'quiz', $s$git add$s$, $s$git add . の「.」は、何を表している？$s$, $j$["ひとつ上のフォルダ","最後に追加したファイル","いまのフォルダ以下の変更をまとめて追加する","隠しファイルだけ"]$j$::jsonb, 2, $s$「.」はいまのフォルダです。git add . で、そのフォルダ以下の新しいファイルや変更を、まとめてステージに追加します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-commit$s$), 'quiz', $s$git status$s$, $s$コミットしたあと、すぐに git status を実行すると、どう表示される？$s$, $j$["Untracked files と出る","nothing to commit, working tree clean と出る","fatal エラーが出る","Changes to be committed と出る"]$j$::jsonb, 1, $s$記録していない変更がなくなったので、「nothing to commit, working tree clean」（変更なし）と出ます。$s$);
+ 
+  -- ========== git-log ==========
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-log$s$), 'quiz', $s$git log$s$, $s$git log で分かることは？$s$, $j$["ファイルの中身","コミットの履歴（ID・作者・日時・メッセージ）","まだ追加していないファイルの一覧","いまいる場所"]$j$::jsonb, 1, $s$git log は、これまでのコミットを新しい順に表示します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-log$s$), 'quiz', $s$git log$s$, $s$git log --oneline をつけると、どうなる？$s$, $j$["古い順に表示される","最新の1件だけが表示される","コミットのメッセージが非表示になる","1つのコミットが1行で短く表示される"]$j$::jsonb, 3, $s$--oneline は、短い ID とメッセージだけを1行で表示します。履歴をざっと見るときに便利です。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-log$s$), 'quiz', $s$git diff$s$, $s$git diff で見られるものは？$s$, $j$["コミットの一覧","ファイルの名前だけ","ステージに追加する前の、変更した部分","ブランチの一覧"]$j$::jsonb, 2, $s$git diff は、ファイルのどこを書き換えたかを、行ごとに表示します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-log$s$), 'quiz', $s$git diff$s$, $s$git diff の表示で、「+」で始まる行は何を表す？$s$, $j$["削除された行","追加された行","変更のない行","エラー"]$j$::jsonb, 1, $s$「+」は追加された行、「-」は削除された行です。何もつかない行は、前後の変更のない行（目印）です。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$git-log$s$), 'quiz', $s$git diff$s$, $s$git add したあとに git diff（オプションなし）を実行しても何も表示されないのは、なぜ？$s$, $j$["変更が消えてしまったから","コミットが完了したから","変更がステージに入り、ステージとの差がなくなったから","git diff が壊れているから"]$j$::jsonb, 2, $s$git diff は、ステージ前の変更だけを表示します。ステージに入った変更は git diff --staged で見られます。$s$);
+end
+$seed4$;

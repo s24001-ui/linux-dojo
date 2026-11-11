@@ -73,6 +73,14 @@ const EXPLAIN: [RegExp, string][] = [
   [/-r not specified/, 'フォルダをコピーするときは、cp -r を使います。'],
   [/missing (file )?operand|missing destination/, 'コマンドに必要な引数（対象の名前など）が足りません。'],
   [/command not found/, 'そのコマンドは存在しません。綴りを確認しましょう。'],
+  [/not a git repository/, 'ここは git のリポジトリではありません。git init でリポジトリを作るか、リポジトリのあるフォルダへ cd で移動しましょう。'],
+  [/pathspec .* did not match/, '指定した名前のファイルがありません。ls で名前を確認しましょう。'],
+  [/Nothing specified, nothing added|Maybe you wanted to say/, '追加するファイル名を指定してください。すべて追加するなら git add . です。'],
+  [/nothing (added )?to commit|no changes added to commit/, 'コミットできる変更がありません。ファイルを作ったり編集したあと、git add でコミットに入れるファイルを選びましょう。'],
+  [/Aborting commit|requires a value/, 'コミットにはメッセージが必要です。git commit -m "メッセージ" のように書きます。'],
+  [/is not a git command/, 'git のあとのコマンド名を確認しましょう（init / status / add / commit / log / diff）。'],
+  [/does not have any commits yet/, 'まだコミットがありません。git add のあと git commit で、最初の記録を作りましょう。'],
+  [/not supported in this practice terminal/, 'この練習用ターミナルでは、まだ使えないコマンドです。'],
 ]
 
 // コマンドの綴り間違い候補を探す（編集距離が2以内で、いちばん近いもの）
@@ -104,70 +112,23 @@ type Env = {
   R: (p: string) => string // cwd から絶対パスへ
   say: (t: string) => void
   err: (t: string) => void
-  stdin: string[] | null // パイプで渡された入力（なければ null）
-  piped: boolean // 出力がパイプで次のコマンドに渡されるか
-}
-
-/* --- ファイルの中身を行ごとに読む道具（head / tail / wc / grep 用） --- */
-const linesOf = (c: string) => (c === '' ? [] : c.replace(/\n$/, '').split('\n'))
-
-function fileLines(e: Env, name: string, cmd: string): string[] | null {
-  const t = e.R(name)
-  if (!exists(e.fs, t)) return e.err(`${cmd}: ${name}: No such file or directory`), null
-  if (isDir(e.fs, t)) return e.err(`${cmd}: ${name}: Is a directory`), null
-  return linesOf(e.fs[t] as string)
-}
-
-// 読む対象。ファイル名があればそのファイル、なければパイプで渡された入力
-function sources(e: Env, files: string[], cmd: string) {
-  if (!files.length) {
-    if (e.stdin) return [{ name: null as string | null, lines: e.stdin }]
-    return e.err(`${cmd}: missing file operand`), null
-  }
-  const out: { name: string | null; lines: string[] }[] = []
-  for (const f of files) {
-    const l = fileLines(e, f, cmd)
-    if (l) out.push({ name: f, lines: l })
-  }
-  return out
-}
-
-// head / tail：-n 3、-n3、-3 のどれでも行数を指定できる（指定なしは10行）
-function headTail(e: Env, cmd: 'head' | 'tail') {
-  let n = 10
-  const files: string[] = []
-  const r = e.rest
-  for (let i = 0; i < r.length; i++) {
-    const a = r[i]
-    if (a === '-n' && /^\d+$/.test(r[i + 1] ?? '')) n = Number(r[++i])
-    else if (/^-n\d+$/.test(a)) n = Number(a.slice(2))
-    else if (/^-\d+$/.test(a)) n = Number(a.slice(1))
-    else if (!a.startsWith('-')) files.push(a)
-  }
-  const srcs = sources(e, files, cmd)
-  if (!srcs) return
-  srcs.forEach((src, i) => {
-    if (srcs.length > 1) {
-      if (i) e.say('')
-      e.say(`==> ${src.name} <==`)
-    }
-    const pick = cmd === 'head' ? src.lines.slice(0, n) : src.lines.slice(Math.max(0, src.lines.length - n))
-    pick.forEach((l) => e.say(l))
-  })
 }
 
 const commands: Record<string, (e: Env) => void> = {
   pwd: (e) => e.say(e.cwd),
 
   echo(e) {
-    const i = e.rest.indexOf('>')
+    const i = e.rest.findIndex((a) => a === '>' || a === '>>')
     if (i < 0) return e.say(e.rest.join(' '))
+    const append = e.rest[i] === '>>'
     const target = e.rest[i + 1]
     if (!target) return e.err('bash: syntax error near unexpected token `newline\'')
     const t = e.R(target)
-    if (isDir(e.fs, t)) e.err(`bash: ${target}: Is a directory`)
-    else if (!isDir(e.fs, parentOf(t))) e.err(`bash: ${target}: No such file or directory`)
-    else e.fs = { ...e.fs, [t]: e.rest.slice(0, i).join(' ') + '\n' }
+    if (isDir(e.fs, t)) return e.err(`bash: ${target}: Is a directory`)
+    if (!isDir(e.fs, parentOf(t))) return e.err(`bash: ${target}: No such file or directory`)
+    let old = append && isFile(e.fs, t) ? (e.fs[t] as string) : ''
+    if (old && !old.endsWith('\n')) old += '\n'
+    e.fs = { ...e.fs, [t]: old + e.rest.slice(0, i).join(' ') + '\n' }
   },
 
   ls(e) {
@@ -184,10 +145,7 @@ const commands: Record<string, (e: Env) => void> = {
         const size = dir ? 4096 : (e.fs[`${t}/${n}`] as string).length
         e.say(`${dir ? 'drwxr-xr-x' : '-rw-r--r--'} 1 student student ${String(size).padStart(4)} Nov  5 10:00 ${n}`)
       }
-    } else if (names.length) {
-      if (e.piped) names.forEach((n) => e.say(n))
-      else e.say(names.join('  '))
-    }
+    } else if (names.length) e.say(names.join('  '))
   },
 
   cd(e) {
@@ -199,10 +157,7 @@ const commands: Record<string, (e: Env) => void> = {
   },
 
   cat(e) {
-    if (!e.args.length) {
-      if (e.stdin) return e.stdin.forEach((l) => e.say(l))
-      return e.err('cat: missing file operand')
-    }
+    if (!e.args.length) return e.err('cat: missing file operand')
     for (const a of e.args) {
       const t = e.R(a)
       if (!exists(e.fs, t)) e.err(`cat: ${a}: No such file or directory`)
@@ -246,74 +201,10 @@ const commands: Record<string, (e: Env) => void> = {
     }
   },
 
-  head: (e) => headTail(e, 'head'),
-  tail: (e) => headTail(e, 'tail'),
-
-  // 行数・単語数・バイト数。-l -w -c で1つだけ表示
-  wc(e) {
-    const srcs = sources(e, e.args, 'wc')
-    if (!srcs) return
-    const all = !/[lwc]/.test(e.flags)
-    const rows = srcs.map((src) => {
-      const text = src.lines.join('\n')
-      const cols: number[] = []
-      if (all || e.flags.includes('l')) cols.push(src.lines.length)
-      if (all || e.flags.includes('w')) cols.push(text.split(/\s+/).filter(Boolean).length)
-      if (all || e.flags.includes('c')) cols.push(new TextEncoder().encode(text + (src.lines.length ? '\n' : '')).length)
-      return { cols, name: src.name }
-    })
-    if (rows.length > 1) rows.push({ cols: rows[0].cols.map((_, i) => rows.reduce((a, r) => a + r.cols[i], 0)), name: 'total' })
-    for (const r of rows) e.say([...r.cols.map((c) => (all ? String(c).padStart(2) : String(c))), r.name].filter((x) => x !== null).join(' '))
-  },
-
-  // 文字を探す。-i 大小無視 / -n 行番号 / -c 件数 / -v 含まない行
-  grep(e) {
-    const [pattern, ...files] = e.args
-    if (pattern === undefined) return e.err('Usage: grep [OPTION]... PATTERNS [FILE]...')
-    const flag = e.flags.includes('i') ? 'i' : ''
-    let re: RegExp
-    try {
-      re = new RegExp(pattern, flag)
-    } catch {
-      re = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flag)
-    }
-    const srcs = sources(e, files, 'grep')
-    if (!srcs) return
-    for (const src of srcs) {
-      const label = srcs.length > 1 && src.name ? `${src.name}:` : ''
-      let count = 0
-      src.lines.forEach((l, i) => {
-        if (re.test(l) === e.flags.includes('v')) return
-        count++
-        if (!e.flags.includes('c')) e.say(`${label}${e.flags.includes('n') ? `${i + 1}:` : ''}${l}`)
-      })
-      if (e.flags.includes('c')) e.say(`${label}${count}`)
-    }
-  },
-
-  // ファイルを名前で探す。find [場所] -name "パターン" [-type f|d]
-  find(e) {
-    const r = e.rest
-    const start = r[0] && !r[0].startsWith('-') ? r[0] : '.'
-    let name: string | null = null
-    let type: string | null = null
-    for (let i = start === r[0] ? 1 : 0; i < r.length; i++) {
-      if (r[i] === '-name') name = r[++i] ?? null
-      else if (r[i] === '-type') type = r[++i] ?? null
-    }
-    const root = e.R(start)
-    if (!exists(e.fs, root)) return e.err(`find: ‘${start}’: No such file or directory`)
-    const re = name === null ? null : new RegExp('^' + name.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$')
-    const walk = (abs: string, shown: string) => {
-      const dir = isDir(e.fs, abs)
-      if ((!re || re.test(baseOf(shown))) && (!type || (type === 'd') === dir)) e.say(shown)
-      if (dir) for (const n of childrenOf(e.fs, abs)) walk(`${abs === '/' ? '' : abs}/${n}`, `${shown.replace(/\/$/, '')}/${n}`)
-    }
-    walk(root, start)
-  },
-
   cp: (e) => copyMove(e, 'cp'),
   mv: (e) => copyMove(e, 'mv'),
+
+  git: (e) => gitCommand(e),
 }
 
 function copyMove(e: Env, name: 'cp' | 'mv') {
@@ -336,6 +227,352 @@ function copyMove(e: Env, name: 'cp' | 'mv') {
   e.fs = next
 }
 
+/* ---------- git（疑似） ----------
+   リポジトリの情報は、疑似ファイルシステムの .git フォルダの中に「文字列のファイル」として置く。
+     .git/HEAD    … 今のブランチ（"ref: refs/heads/main"）
+     .git/index   … ステージ（git add 済み）のファイル一覧。JSON：{ "相対パス": "中身" }
+     .git/commits … コミットの履歴。JSON：[{ id, msg, date, tree }]（tree は、そのときの全ファイル）
+   ブラウザの中だけで動く。本物の git や通信は使わない。
+   対応：init / status / add / commit（-m, -am）/ log（--oneline）/ diff（--staged）/ config（何もしない） */
+
+type Tree = Record<string, string> // リポジトリのルートからの相対パス → ファイルの中身
+type Commit = { id: string; msg: string; date: string; tree: Tree }
+type Op = { t: ' ' | '+' | '-'; s: string }
+
+const BRANCH = 'main'
+const BLANK = ' ' // 空行（空文字だと高さがなくなるので、空白を1つ入れる）
+const GIT_SUBS = ['init', 'status', 'add', 'commit', 'log', 'diff']
+const GIT_LATER = ['branch', 'checkout', 'switch', 'merge', 'remote', 'push', 'pull', 'clone', 'fetch', 'restore', 'reset', 'stash', 'rm', 'mv', 'tag', 'show']
+
+// 文字列から16進のハッシュを作る（コミットIDなどに使う。本物のSHA-1ではない）
+function hash(s: string, seed = 0): string {
+  let h1 = 0xdeadbeef ^ seed
+  let h2 = 0x41c6ce57 ^ seed
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i)
+    h1 = Math.imul(h1 ^ ch, 2654435761)
+    h2 = Math.imul(h2 ^ ch, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0')
+}
+const sha = (s: string) => [0, 1, 2, 3, 4].map((i) => hash(s, i)).join('').slice(0, 40)
+const blob = (s: string) => hash(s).slice(0, 7)
+
+function gitDate(d = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  const off = -d.getTimezoneOffset()
+  const a = Math.abs(off)
+  const w = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]
+  const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]
+  return `${w} ${m} ${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} ${d.getFullYear()} ${off >= 0 ? '+' : '-'}${p(Math.floor(a / 60))}${p(a % 60)}`
+}
+
+const base = (root: string) => (root === '/' ? '' : root)
+const gitFile = (root: string, name: string) => `${base(root)}/.git/${name}`
+
+// いまいる場所から上へたどって、.git があるフォルダ（リポジトリのルート）を探す
+function gitRoot(fs: Fs, cwd: string): string | null {
+  for (let p = cwd; ; p = parentOf(p)) {
+    if (isDir(fs, `${base(p)}/.git`)) return p
+    if (p === '/') return null
+  }
+}
+
+function readJson<T>(fs: Fs, path: string, fallback: T): T {
+  try {
+    const v = fs[path]
+    return typeof v === 'string' ? (JSON.parse(v) as T) : fallback
+  } catch {
+    return fallback
+  }
+}
+const readIndex = (fs: Fs, root: string) => readJson<Tree>(fs, gitFile(root, 'index'), {})
+const readCommits = (fs: Fs, root: string) => readJson<Commit[]>(fs, gitFile(root, 'commits'), [])
+
+// 作業フォルダにあるファイル（.git の中は除く）
+function workTree(fs: Fs, root: string): Tree {
+  const t: Tree = {}
+  for (const [k, v] of Object.entries(fs)) {
+    if (typeof v === 'string' && k.startsWith(base(root) + '/') && !k.startsWith(`${base(root)}/.git/`)) t[k.slice(base(root).length + 1)] = v
+  }
+  return t
+}
+
+// cwd から見た相対パス（git status の表示用）
+function relTo(cwd: string, abs: string): string {
+  const a = cwd.split('/').filter(Boolean)
+  const b = abs.split('/').filter(Boolean)
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i++
+  return [...Array<string>(a.length - i).fill('..'), ...b.slice(i)].join('/') || '.'
+}
+
+const toLines = (s: string) => (s === '' ? [] : s.replace(/\n$/, '').split('\n'))
+
+// 行ごとの差分（最長共通部分列）
+function lineDiff(a: string[], b: string[]): Op[] {
+  const n = a.length
+  const m = b.length
+  const L = Array.from({ length: n + 1 }, () => Array<number>(m + 1).fill(0))
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1])
+  const ops: Op[] = []
+  let i = 0
+  let j = 0
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      ops.push({ t: ' ', s: a[i] })
+      i++
+      j++
+    } else if (L[i + 1][j] >= L[i][j + 1]) ops.push({ t: '-', s: a[i++] })
+    else ops.push({ t: '+', s: b[j++] })
+  }
+  while (i < n) ops.push({ t: '-', s: a[i++] })
+  while (j < m) ops.push({ t: '+', s: b[j++] })
+  return ops
+}
+
+// 変更のある範囲（前後3行つき）を、diff の「@@ ... @@」の形にする
+function hunk(ops: Op[]): string[] {
+  const hit = ops.map((o, k) => (o.t === ' ' ? -1 : k)).filter((k) => k >= 0)
+  if (!hit.length) return []
+  const from = Math.max(0, hit[0] - 3)
+  const to = Math.min(ops.length, hit[hit.length - 1] + 4)
+  const part = ops.slice(from, to)
+  const before = ops.slice(0, from)
+  const aStart = before.filter((o) => o.t !== '+').length + 1
+  const bStart = before.filter((o) => o.t !== '-').length + 1
+  const aLen = part.filter((o) => o.t !== '+').length
+  const bLen = part.filter((o) => o.t !== '-').length
+  const range = (start: number, len: number) => (len === 1 ? `${start}` : `${len === 0 ? start - 1 : start},${len}`)
+  return [`@@ -${range(aStart, aLen)} +${range(bStart, bLen)} @@`, ...part.map((o) => o.t + o.s)]
+}
+
+// 2つの状態（ファイルの一覧）の違いを、git diff の形で出す
+function diffTrees(a: Tree, b: Tree): string[] {
+  const out: string[] = []
+  for (const p of [...new Set([...Object.keys(a), ...Object.keys(b)])].sort()) {
+    const x = a[p]
+    const y = b[p]
+    if (x === y) continue
+    out.push(`diff --git a/${p} b/${p}`)
+    if (x === undefined) out.push('new file mode 100644', `index 0000000..${blob(y ?? '')}`)
+    else if (y === undefined) out.push('deleted file mode 100644', `index ${blob(x)}..0000000`)
+    else out.push(`index ${blob(x)}..${blob(y)} 100644`)
+    out.push(x === undefined ? '--- /dev/null' : `--- a/${p}`, y === undefined ? '+++ /dev/null' : `+++ b/${p}`)
+    out.push(...hunk(lineDiff(toLines(x ?? ''), toLines(y ?? ''))))
+  }
+  return out
+}
+
+// 最後のコミット・ステージ・作業フォルダの3つを比べる
+function compare(head: Tree, index: Tree, work: Tree) {
+  const staged: [string, string][] = []
+  for (const p of [...new Set([...Object.keys(head), ...Object.keys(index)])].sort()) {
+    if (head[p] === index[p]) continue
+    staged.push([head[p] === undefined ? 'new file' : index[p] === undefined ? 'deleted' : 'modified', p])
+  }
+  const unstaged: [string, string][] = []
+  for (const p of Object.keys(index).sort()) {
+    if (work[p] === undefined) unstaged.push(['deleted', p])
+    else if (work[p] !== index[p]) unstaged.push(['modified', p])
+  }
+  const untracked = Object.keys(work).filter((p) => !(p in index)).sort()
+  return { staged, unstaged, untracked }
+}
+
+// git status の表示
+function statusLines(fs: Fs, root: string, cwd: string, index = readIndex(fs, root)): string[] {
+  const commits = readCommits(fs, root)
+  const st = compare(commits.at(-1)?.tree ?? {}, index, workTree(fs, root))
+  const show = (rel: string) => relTo(cwd, `${base(root)}/${rel}`)
+  const out = [`On branch ${BRANCH}`]
+  if (!commits.length) out.push(BLANK, 'No commits yet')
+  if (st.staged.length) {
+    out.push(BLANK, 'Changes to be committed:', commits.length ? '  (use "git restore --staged <file>..." to unstage)' : '  (use "git rm --cached <file>..." to unstage)')
+    for (const [label, p] of st.staged) out.push(`\t${(label + ':').padEnd(12)}${show(p)}`)
+  }
+  if (st.unstaged.length) {
+    out.push(BLANK, 'Changes not staged for commit:', '  (use "git add <file>..." to update what will be committed)', '  (use "git restore <file>..." to discard changes in working directory)')
+    for (const [label, p] of st.unstaged) out.push(`\t${(label + ':').padEnd(12)}${show(p)}`)
+  }
+  if (st.untracked.length) {
+    out.push(BLANK, 'Untracked files:', '  (use "git add <file>..." to include in what will be committed)')
+    const names = new Set<string>()
+    for (const p of st.untracked) {
+      const top = p.split('/')[0]
+      // 追跡中のファイルがないフォルダは、「フォルダ名/」とまとめて表示する
+      if (p.includes('/') && !Object.keys(index).some((k) => k.startsWith(top + '/'))) names.add(show(top) + '/')
+      else names.add(show(p))
+    }
+    for (const n of names) out.push(`\t${n}`)
+  }
+  if (!st.staged.length && !st.unstaged.length && !st.untracked.length) {
+    if (commits.length) out.push('nothing to commit, working tree clean')
+    else out.push(BLANK, 'nothing to commit (create/copy files and use "git add" to track)')
+  } else if (!st.staged.length) {
+    out.push(BLANK, st.unstaged.length ? 'no changes added to commit (use "git add" and/or "git commit -a")' : 'nothing added to commit but untracked files present (use "git add" to track)')
+  }
+  return out
+}
+
+function gitInit(e: Env) {
+  const target = e.rest.slice(1).find((a) => !a.startsWith('-'))
+  const dir = target ? e.R(target) : e.cwd
+  if (target && isFile(e.fs, dir)) return e.err(`fatal: cannot mkdir ${target}: File exists`)
+  const next = { ...e.fs }
+  for (let p = dir; !exists(next, p); p = parentOf(p)) next[p] = null
+  if (isDir(next, `${base(dir)}/.git`)) {
+    e.say(`Reinitialized existing Git repository in ${base(dir)}/.git/`)
+    e.fs = next
+    return
+  }
+  next[`${base(dir)}/.git`] = null
+  next[gitFile(dir, 'HEAD')] = `ref: refs/heads/${BRANCH}\n`
+  next[gitFile(dir, 'index')] = '{}'
+  next[gitFile(dir, 'commits')] = '[]'
+  e.fs = next
+  e.say(`Initialized empty Git repository in ${base(dir)}/.git/`)
+}
+
+function gitAdd(e: Env, root: string) {
+  const a = e.rest.slice(1)
+  const all = a.includes('-A') || a.includes('--all')
+  const targets = a.filter((x) => !x.startsWith('-'))
+  if (!targets.length && !all) {
+    e.err('Nothing specified, nothing added.')
+    e.say("hint: Maybe you wanted to say 'git add .'?")
+    return
+  }
+  const index = { ...readIndex(e.fs, root) }
+  const work = workTree(e.fs, root)
+  const names = new Set([...Object.keys(work), ...Object.keys(index)])
+  const picked = new Set<string>()
+  for (const t of all ? [base(root) || '/'] : targets) {
+    const abs = all ? base(root) : e.R(t)
+    const rel = abs === base(root) ? '' : abs.startsWith(base(root) + '/') ? abs.slice(base(root).length + 1) : null
+    if (rel === null) return e.err(`fatal: ${t}: '${t}' is outside repository at '${base(root)}'`)
+    const hits = [...names].filter((p) => rel === '' || p === rel || p.startsWith(rel + '/'))
+    if (!hits.length) return e.err(`fatal: pathspec '${t}' did not match any files`)
+    hits.forEach((p) => picked.add(p))
+  }
+  for (const p of picked) {
+    if (work[p] !== undefined) index[p] = work[p]
+    else delete index[p] // 消したファイルは「削除」をステージする
+  }
+  e.fs = { ...e.fs, [gitFile(root, 'index')]: JSON.stringify(index) }
+}
+
+function gitCommit(e: Env, root: string) {
+  const a = e.rest.slice(1)
+  let msg: string | undefined
+  let all = false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === '-m' || a[i] === '-am') {
+      if (a[i] === '-am') all = true
+      if (a[i + 1] === undefined) return e.err("error: switch `m' requires a value")
+      msg = a[++i]
+    } else if (a[i] === '-a') all = true
+  }
+  const commits = readCommits(e.fs, root)
+  const head = commits.at(-1)?.tree ?? {}
+  const work = workTree(e.fs, root)
+  const index = { ...readIndex(e.fs, root) }
+  if (all) {
+    for (const p of Object.keys(index)) {
+      if (work[p] === undefined) delete index[p]
+      else index[p] = work[p]
+    }
+  }
+  const changed = [...new Set([...Object.keys(head), ...Object.keys(index)])].filter((p) => head[p] !== index[p]).sort()
+  if (!changed.length) {
+    const lines = statusLines(e.fs, root, e.cwd, index)
+    const last = lines.pop() ?? ''
+    lines.forEach((l) => e.say(l))
+    return e.err(last)
+  }
+  if (!msg) return e.err('Aborting commit due to empty commit message.')
+
+  const parent = commits.at(-1)
+  const id = sha(JSON.stringify({ parent: parent?.id ?? null, msg, tree: index }))
+  e.fs = { ...e.fs, [gitFile(root, 'commits')]: JSON.stringify([...commits, { id, msg, date: gitDate(), tree: index }]), [gitFile(root, 'index')]: JSON.stringify(index) }
+
+  let ins = 0
+  let del = 0
+  for (const p of changed) {
+    for (const o of lineDiff(toLines(head[p] ?? ''), toLines(index[p] ?? ''))) {
+      if (o.t === '+') ins++
+      if (o.t === '-') del++
+    }
+  }
+  const n = changed.length
+  e.say(`[${BRANCH}${parent ? '' : ' (root-commit)'} ${id.slice(0, 7)}] ${msg}`)
+  e.say(` ${n} file${n > 1 ? 's' : ''} changed` + (!ins && !del ? ', 0 insertions(+), 0 deletions(-)' : '') + (ins ? `, ${ins} insertion${ins > 1 ? 's' : ''}(+)` : '') + (del ? `, ${del} deletion${del > 1 ? 's' : ''}(-)` : ''))
+  for (const p of changed) {
+    if (head[p] === undefined) e.say(` create mode 100644 ${p}`)
+    else if (index[p] === undefined) e.say(` delete mode 100644 ${p}`)
+  }
+}
+
+function gitLog(e: Env, root: string) {
+  const commits = readCommits(e.fs, root)
+  if (!commits.length) return e.err(`fatal: your current branch '${BRANCH}' does not have any commits yet`)
+  const oneline = e.rest.includes('--oneline')
+  const tip = `(HEAD -> ${BRANCH})`
+  commits
+    .map((c, i) => ({ c, latest: i === commits.length - 1 }))
+    .reverse()
+    .forEach(({ c, latest }) => {
+      if (oneline) return e.say(`${c.id.slice(0, 7)} ${latest ? tip + ' ' : ''}${c.msg}`)
+      e.say(`commit ${c.id}${latest ? ' ' + tip : ''}`)
+      e.say('Author: student <student@example.com>')
+      e.say(`Date:   ${c.date}`)
+      e.say(BLANK)
+      e.say(`    ${c.msg}`)
+      e.say(BLANK)
+    })
+}
+
+function gitDiff(e: Env, root: string) {
+  const index = readIndex(e.fs, root)
+  if (e.rest.includes('--staged') || e.rest.includes('--cached')) {
+    return diffTrees(readCommits(e.fs, root).at(-1)?.tree ?? {}, index).forEach((l) => e.say(l))
+  }
+  const work = workTree(e.fs, root)
+  const now: Tree = {}
+  for (const p of Object.keys(index)) if (work[p] !== undefined) now[p] = work[p]
+  diffTrees(index, now).forEach((l) => e.say(l))
+}
+
+function gitCommand(e: Env) {
+  const sub = e.rest[0]
+  if (!sub) {
+    e.say('usage: git <command> [<args>]')
+    e.say(BLANK)
+    e.say('この練習用ターミナルで使えるコマンド：init status add commit log diff')
+    return
+  }
+  if (sub === '--version' || sub === 'version') return e.say('git version 2.43.0')
+  if (sub === 'config') return // 練習用なので、設定は不要（何も表示しない）
+  if (GIT_LATER.includes(sub)) return e.err(`git: '${sub}' is not supported in this practice terminal yet`)
+  if (!GIT_SUBS.includes(sub)) {
+    e.err(`git: '${sub}' is not a git command. See 'git --help'.`)
+    const near = GIT_SUBS.map((n) => [n, distance(sub, n)] as const).filter(([, d]) => d <= 2).sort((x, y) => x[1] - y[1])[0]
+    if (near) e.say(`\nThe most similar command is\n\t${near[0]}`)
+    return
+  }
+  if (sub === 'init') return gitInit(e)
+  const root = gitRoot(e.fs, e.cwd)
+  if (!root) return e.err('fatal: not a git repository (or any of the parent directories): .git')
+  if (sub === 'status') return statusLines(e.fs, root, e.cwd).forEach((l) => e.say(l))
+  if (sub === 'add') return gitAdd(e, root)
+  if (sub === 'commit') return gitCommit(e, root)
+  if (sub === 'log') return gitLog(e, root)
+  if (sub === 'diff') return gitDiff(e, root)
+}
+
 /* ---------- 入力の解析と実行 ---------- */
 
 // 空白で区切り、引用符（"" または ''）の中は1つの引数にする
@@ -345,45 +582,7 @@ export function tokenize(input: string): string[] {
 
 export type Result = { state: TermState; out: Line[]; clear?: boolean; error?: boolean }
 
-// 「|」で区切る（引用符 "" '' の中の | は区切りにしない）
-export function splitPipes(input: string): string[] {
-  const parts: string[] = ['']
-  let quote = ''
-  for (const ch of input) {
-    if (quote) {
-      if (ch === quote) quote = ''
-    } else if (ch === '"' || ch === "'") quote = ch
-    else if (ch === '|') {
-      parts.push('')
-      continue
-    }
-    parts[parts.length - 1] += ch
-  }
-  return parts
-}
-
-// 入力1行を実行する。「|」があれば、左のコマンドの出力を右のコマンドの入力に渡していく
 export function exec(state: TermState, input: string): Result {
-  if (!input.trim()) return { state, out: [] }
-  const stages = splitPipes(input)
-  if (stages.length === 1) return runStage(state, input, null, false)
-  if (stages.some((x) => !x.trim())) return { state, out: [{ kind: 'err', text: "bash: syntax error near unexpected token `|'" }], error: true }
-
-  let st = state
-  let stdin: string[] | null = null
-  const side: Line[] = [] // 途中のエラーや解説は、そのまま表示する
-  let last: Result = { state, out: [] }
-  stages.forEach((cmd, i) => {
-    last = runStage(st, cmd, stdin, i < stages.length - 1)
-    st = { fs: last.state.fs, cwd: state.cwd } // パイプの途中で cd しても、現在地は変わらない
-    stdin = last.out.filter((l) => l.kind === 'out').map((l) => l.text)
-    if (i < stages.length - 1) side.push(...last.out.filter((l) => l.kind !== 'out'))
-  })
-  const l: Result = last
-  return { state: st, out: [...side, ...l.out], error: l.error || side.some((x) => x.kind === 'err') }
-}
-
-function runStage(state: TermState, input: string, stdin: string[] | null, piped: boolean): Result {
   const out: Line[] = []
   let error = false
   const [cmd, ...rest] = tokenize(input)
@@ -397,8 +596,6 @@ function runStage(state: TermState, input: string, stdin: string[] | null, piped
     args: rest.filter((a) => !/^-[A-Za-z]+$/.test(a)),
     flags: rest.filter((a) => /^-[A-Za-z]+$/.test(a)).map((a) => a.slice(1)).join(''),
     R: (p) => resolve(state.cwd, p),
-    stdin,
-    piped,
     say: (text) => out.push({ kind: 'out', text }),
     err(text) {
       error = true
