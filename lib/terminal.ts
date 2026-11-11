@@ -110,15 +110,18 @@ const commands: Record<string, (e: Env) => void> = {
   pwd: (e) => e.say(e.cwd),
 
   echo(e) {
-    const i = e.rest.indexOf('>')
-    if (i < 0) return e.say(e.rest.join(' '))
-    const target = e.rest[i + 1]
-    if (!target) return e.err('bash: syntax error near unexpected token `newline\'')
-    const t = e.R(target)
-    if (isDir(e.fs, t)) e.err(`bash: ${target}: Is a directory`)
-    else if (!isDir(e.fs, parentOf(t))) e.err(`bash: ${target}: No such file or directory`)
-    else e.fs = { ...e.fs, [t]: e.rest.slice(0, i).join(' ') + '\n' }
-  },
+  const i = e.rest.findIndex((a) => a === '>' || a === '>>')
+  if (i < 0) return e.say(e.rest.join(' '))
+  const append = e.rest[i] === '>>'
+  const target = e.rest[i + 1]
+  if (!target) return e.err('bash: syntax error near unexpected token `newline\'')
+  const t = e.R(target)
+  if (isDir(e.fs, t)) return e.err(`bash: ${target}: Is a directory`)
+  if (!isDir(e.fs, parentOf(t))) return e.err(`bash: ${target}: No such file or directory`)
+  let old = append && isFile(e.fs, t) ? (e.fs[t] as string) : ''
+  if (old && !old.endsWith('\n')) old += '\n'
+  e.fs = { ...e.fs, [t]: old + e.rest.slice(0, i).join(' ') + '\n' }
+},
 
   ls(e) {
     const arg = e.args[0]

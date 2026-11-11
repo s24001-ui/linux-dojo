@@ -8,6 +8,16 @@ insert into lessons (code, title, sort_order, category) values ($s$cd$s$, $s$移
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
 insert into lessons (code, title, sort_order, category) values ($s$mkdir$s$, $s$作ってみよう（mkdir・touch）$s$, 3, $s$ファイル操作$s$)
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+insert into lessons (code, title, sort_order, category) values ($s$cat$s$, $s$中身を読んでみよう（cat）$s$, 4, $s$ファイル操作$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+insert into lessons (code, title, sort_order, category) values ($s$echo$s$, $s$文字を書いてみよう（echo）$s$, 5, $s$ファイル操作$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+insert into lessons (code, title, sort_order, category) values ($s$cp$s$, $s$コピーしてみよう（cp）$s$, 6, $s$ファイル操作$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+insert into lessons (code, title, sort_order, category) values ($s$mv$s$, $s$移動・名前変更をしてみよう（mv）$s$, 7, $s$ファイル操作$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+insert into lessons (code, title, sort_order, category) values ($s$rm$s$, $s$削除してみよう（rm）$s$, 8, $s$ファイル操作$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
 
 insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
   values ((select id from lessons where code=$s$ls$s$), 1, $s$ls を実行して、いまのフォルダの中身を見てみましょう。$s$, $s$ls とだけ入力して Enter を押します。$s$, $j${"commands": ["^ls$"]}$j$::jsonb, $j${"dirs": ["work"], "files": {"memo.txt": "あとで読む", ".secret": "ひみつ", "documents/report.txt": "レポート"}}$j$::jsonb)
@@ -38,6 +48,60 @@ insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, s
   on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
 insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
   values ((select id from lessons where code=$s$mkdir$s$), 3, $s$ls project で、作ったファイルを確かめましょう。$s$, $s$ls project と入力します。$s$, $j${"commands": ["^ls\\s+project/?$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+-- ========== cat ==========
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$cat$s$), 1, $s$cat memo.txt で、memo.txt の中身を表示してみましょう。$s$, $s$cat のあとに、読みたいファイル名を入力します。$s$, $j${"commands": ["^cat\\s+memo\\.txt$"]}$j$::jsonb, $j${"dirs": ["work"], "files": {"memo.txt": "あとで読む", ".secret": "ひみつ", "documents/report.txt": "レポート"}}$j$::jsonb)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$cat$s$), 2, $s$cat documents/report.txt で、documents フォルダの中のファイルを表示しましょう。$s$, $s$フォルダの中のファイルは「フォルダ名/ファイル名」と書きます。$s$, $j${"commands": ["^cat\\s+documents/report\\.txt$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$cat$s$), 3, $s$cat memo.txt documents/report.txt で、2つのファイルを続けて表示しましょう。$s$, $s$cat のあとに、ファイル名を半角スペースで区切って2つ並べます。$s$, $j${"commands": ["^cat\\s+memo\\.txt\\s+documents/report\\.txt$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+ 
+-- ========== echo ==========
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$echo$s$), 1, $s$echo hello で、画面に hello と表示してみましょう。$s$, $s$echo のあとに、表示したい文字を入力します。$s$, $j${"commands": ["^echo\\s+\\S+"]}$j$::jsonb, $j${"dirs": ["work"], "files": {"memo.txt": "あとで読む", ".secret": "ひみつ", "documents/report.txt": "レポート"}}$j$::jsonb)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$echo$s$), 2, $s$echo hello > hello.txt で、文字をファイルに書き込みましょう。$s$, $s$「>」は、画面に出す代わりにファイルへ書き込む記号です。ファイルがなければ新しく作られます。$s$, $j${"commands": ["^echo\\s+.+\\s*>\\s*hello\\.txt$"], "files": ["hello.txt"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$echo$s$), 3, $s$echo world >> hello.txt で、hello.txt の最後に文字を書き足しましょう。$s$, $s$「>>」は追記です。「>」だと中身が上書きされるので注意しましょう。$s$, $j${"commands": ["^echo\\s+.+\\s*>>\\s*hello\\.txt$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$echo$s$), 4, $s$cat hello.txt で、書き込んだ内容を確かめましょう。$s$, $s$cat のあとにファイル名を入力します。2行表示されれば成功です。$s$, $j${"commands": ["^cat\\s+hello\\.txt$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+ 
+-- ========== cp ==========
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$cp$s$), 1, $s$cp memo.txt memo2.txt で、memo.txt のコピー memo2.txt を作りましょう。$s$, $s$cp のあとに「コピー元」「コピー先」の順で入力します。$s$, $j${"files": ["memo.txt", "memo2.txt"]}$j$::jsonb, $j${"dirs": ["work"], "files": {"memo.txt": "あとで読む", ".secret": "ひみつ", "documents/report.txt": "レポート"}}$j$::jsonb)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$cp$s$), 2, $s$cp memo.txt documents で、memo.txt を documents フォルダの中にコピーしましょう。$s$, $s$コピー先にフォルダ名を書くと、そのフォルダの中にコピーされます。$s$, $j${"files": ["memo.txt", "documents/memo.txt"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$cp$s$), 3, $s$cp -r documents backup で、documents フォルダを中身ごとコピーしましょう。$s$, $s$フォルダをコピーするには、-r（recursive：中身ごと）をつけます。$s$, $j${"commands": ["^cp\\s+-\\w*r\\w*\\s+documents\\s+backup/?$"], "dirs": ["backup"], "files": ["backup/report.txt", "documents/report.txt"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+ 
+-- ========== mv ==========
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$mv$s$), 1, $s$mv memo.txt note.txt で、memo.txt を note.txt に名前変更しましょう。$s$, $s$mv は同じ場所で名前だけ変えることもできます。「元の名前」「新しい名前」の順です。$s$, $j${"files": ["note.txt"], "absent": ["memo.txt"]}$j$::jsonb, $j${"dirs": ["work"], "files": {"memo.txt": "あとで読む", ".secret": "ひみつ", "documents/report.txt": "レポート"}}$j$::jsonb)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$mv$s$), 2, $s$mv note.txt documents で、note.txt を documents フォルダへ移動しましょう。$s$, $s$移動先にフォルダ名を書くと、そのフォルダの中へ移動します。cp と違い、元の場所からはなくなります。$s$, $j${"files": ["documents/note.txt"], "absent": ["note.txt"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$mv$s$), 3, $s$ls documents で、移動したファイルを確かめましょう。$s$, $s$ls documents と入力します。$s$, $j${"commands": ["^ls\\s+documents/?$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+ 
+-- ========== rm ==========
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$rm$s$), 1, $s$rm memo.txt で、memo.txt を削除しましょう。$s$, $s$rm のあとに、消したいファイル名を入力します。消したファイルは元に戻せないので注意しましょう。$s$, $j${"absent": ["memo.txt"]}$j$::jsonb, $j${"dirs": ["work"], "files": {"memo.txt": "いらないメモ", "documents/report.txt": "レポート", "temp/a.txt": "一時ファイル"}}$j$::jsonb)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$rm$s$), 2, $s$rm -r temp で、temp フォルダを中身ごと削除しましょう。$s$, $s$フォルダを消すには -r（recursive：中身ごと）をつけます。$s$, $j${"commands": ["^rm\\s+-\\w*r\\w*\\s+temp/?$"], "absent": ["temp", "temp/a.txt"]}$j$::jsonb, null)
   on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
 
 do $seed$
