@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useSyncExternalStore } from 'react'
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { recordQuizAnswer, saveQuizResult } from '@/app/actions'
 import type { LessonRow, QuizRow } from '@/lib/types'
 
@@ -10,10 +10,24 @@ const noop = () => () => {}
 // 毎回ちがう順番で出題する。サーバーと表示がずれないよう、ブラウザで表示してから抽出する
 export default function QuizView(props: { lesson: Pick<LessonRow, 'code' | 'title'>; questions: QuizRow[] }) {
   const mounted = useSyncExternalStore(noop, () => true, () => false)
-  return mounted ? <QuizBody {...props} /> : <p>問題を読み込み中…</p>
+  // Cache Components では、ページを離れても画面（Activity）が隠れるだけで状態が残る。
+  // 「もう一度受ける」で戻ってきたとき、前回の最後の問題が表示されたままにならないよう、
+  // 結果画面へ進んだあとに隠れたら key を変えて作り直す（新しい問題でやり直せる）。
+  // 途中で離れただけなら、状態はそのまま残す。
+  const [round, setRound] = useState(0)
+  const finished = useRef(false)
+  useLayoutEffect(() => {
+    return () => {
+      if (finished.current) {
+        finished.current = false
+        setRound((r) => r + 1)
+      }
+    }
+  }, [])
+  return mounted ? <QuizBody key={round} {...props} onFinish={() => { finished.current = true }} /> : <p>問題を読み込み中…</p>
 }
 
-function QuizBody({ lesson, questions }: { lesson: Pick<LessonRow, 'code' | 'title'>; questions: QuizRow[] }) {
+function QuizBody({ lesson, questions, onFinish }: { lesson: Pick<LessonRow, 'code' | 'title'>; questions: QuizRow[]; onFinish: () => void }) {
   const router = useRouter()
   // レッスンの問題からランダムに最大10問
   const [qs] = useState(() => [...questions].sort(() => Math.random() - 0.5).slice(0, 10))
@@ -43,6 +57,7 @@ function QuizBody({ lesson, questions }: { lesson: Pick<LessonRow, 'code' | 'tit
     const score = qs.filter((x) => results[x.id]).length
     await saveQuizResult(lesson.code, score, qs.length).catch(() => {})
     const r = qs.map((x) => `${x.id}:${results[x.id] ? 1 : 0}`).join(',')
+    onFinish() // 結果画面へ移動したあと、この画面が隠れたら作り直す
     router.push(`/lessons/${lesson.code}/result?r=${r}`)
   }
 
