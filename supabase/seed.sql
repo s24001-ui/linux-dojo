@@ -153,3 +153,73 @@ begin
     values ('scenario', $s$mv$s$, $s$写真を整理しよう$s$, $s$ホームに写真が散らかっています。photos フォルダを作って、すべての写真を移動しましょう。$s$, $j${"summary": "ばらばらの写真を、フォルダにまとめる", "commands": "mkdir / mv / ls", "fs": {"files": {"a.jpg": "", "b.jpg": "", "c.jpg": ""}}, "goals": [{"label": "photos フォルダを作る", "hints": ["mkdir を使います。", "mkdir photos"], "dirs": ["photos"]}, {"label": "a.jpg を photos に移動する", "hints": ["移動は mv を使います。", "mv a.jpg photos"], "files": ["photos/a.jpg"], "absent": ["a.jpg"]}, {"label": "b.jpg と c.jpg も photos に移動する", "hints": ["ひとつずつ mv を実行します。", "mv b.jpg photos / mv c.jpg photos"], "files": ["photos/b.jpg", "photos/c.jpg"]}], "checks": [{"files": ["photos/a.jpg", "photos/b.jpg", "photos/c.jpg"], "absent": ["a.jpg", "b.jpg", "c.jpg"]}]}$j$::jsonb);
 end
 $seed$;
+
+do $seed2$
+begin
+  if exists (
+    select 1 from questions
+    where question_type = 'quiz'
+      and lesson_id in (select id from lessons where code in ($s$cat$s$, $s$echo$s$, $s$cp$s$, $s$mv$s$, $s$rm$s$))
+  ) then return; end if;
+ 
+  -- ========== cat ==========
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$cat$s$), 'quiz', $s$cat$s$, $s$documents フォルダの中の report.txt を表示する正しい書き方はどれ？$s$, $j$["cat report.txt documents", "cat documents/report.txt", "cat documents report.txt", "ls documents/report.txt"]$j$::jsonb, 1, $s$フォルダの中のファイルは「フォルダ名/ファイル名」と書きます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$cat$s$), 'quiz', $s$cat$s$, $s$a.txt と b.txt を続けて表示するコマンドはどれ？$s$, $j$["cat a.txt b.txt", "cat a.txt + b.txt", "cat a.txt, b.txt", "cat -2 a.txt b.txt"]$j$::jsonb, 0, $s$cat のあとに、ファイル名を半角スペースで区切って並べると、順番に表示されます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$cat$s$), 'quiz', $s$cat$s$, $s$存在しない hoge.txt を cat で表示しようとすると、どうなる？$s$, $j$["空のファイルが表示される", "hoge.txt が自動で作られる", "何も起きずに終わる", "No such file or directory というエラーが出る"]$j$::jsonb, 3, $s$ファイルがないと「No such file or directory」というエラーになります。ls で名前を確認しましょう。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$cat$s$), 'quiz', $s$cat$s$, $s$フォルダ documents を cat で表示しようとすると、どうなる？$s$, $j$["フォルダの中のファイル一覧が表示される", "Is a directory というエラーが出る", "フォルダの中身がすべて連結されて表示される", "フォルダが削除される"]$j$::jsonb, 1, $s$cat はファイルの中身を表示するコマンドです。フォルダには使えません。フォルダの中身は ls で見ます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$cat$s$), 'quiz', $s$cat$s$, $s$cat は、何という英単語に由来する名前？$s$, $j$["catalog（目録）", "concatenate（連結する）", "category（分類）", "capture（捕まえる）"]$j$::jsonb, 1, $s$cat は concatenate（連結する）の略です。複数のファイルをつなげて表示できることから名づけられました。$s$);
+ 
+  -- ========== echo ==========
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$echo$s$), 'quiz', $s$echo$s$, $s$画面に hello と表示するコマンドはどれ？$s$, $j$["print hello", "echo hello", "say hello", "show hello"]$j$::jsonb, 1, $s$echo は、あとに書いた文字をそのまま画面に表示します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$echo$s$), 'quiz', $s$echo$s$, $s$echo hi > a.txt を実行すると、何が起きる？$s$, $j$["画面に hi と表示される", "a.txt に hi が書き込まれる", "a.txt が削除される", "a.txt の中身が表示される"]$j$::jsonb, 1, $s$「>」をつけると、画面に出す代わりに、ファイルへ書き込まれます。ファイルがなければ新しく作られます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$echo$s$), 'quiz', $s$echo$s$, $s$すでに中身があるファイルに echo ... > file.txt で書き込むと、どうなる？$s$, $j$["末尾に書き足される", "エラーになる", "元の中身が上書きされる", "別の名前のファイルが作られる"]$j$::jsonb, 2, $s$「>」は上書きです。元の中身は消えるので注意しましょう。書き足したいときは「>>」を使います。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$echo$s$), 'quiz', $s$echo$s$, $s$ファイルの末尾に文字を書き足す（追記する）ときに使う記号はどれ？$s$, $j$["|", ">", "<<", ">>"]$j$::jsonb, 3, $s$「>>」は追記です。元の中身を残したまま、末尾に書き足します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$echo$s$), 'quiz', $s$cat$s$, $s$echo hi > a.txt のあと、書き込まれた内容を確かめるコマンドはどれ？$s$, $j$["ls a.txt", "cat a.txt", "pwd", "echo a.txt"]$j$::jsonb, 1, $s$cat でファイルの中身を表示して確かめます。ls a.txt はファイルの名前が出るだけです。$s$);
+ 
+  -- ========== cp ==========
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$cp$s$), 'quiz', $s$cp$s$, $s$a.txt を b.txt という名前でコピーするコマンドはどれ？$s$, $j$["cp a.txt b.txt", "cp b.txt a.txt", "copy a.txt b.txt", "mv a.txt b.txt"]$j$::jsonb, 0, $s$cp は copy の略です。「cp コピー元 コピー先」の順で書きます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$cp$s$), 'quiz', $s$cp$s$, $s$cp a.txt b.txt で、コピー元になるのはどれ？$s$, $j$["b.txt", "a.txt", "どちらも元になる", "順番は関係ない"]$j$::jsonb, 1, $s$最初に書いたファイル（a.txt）がコピー元、あとに書いたもの（b.txt）がコピー先です。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$cp$s$), 'quiz', $s$cp$s$, $s$documents フォルダがあるとき、cp a.txt documents を実行すると、どうなる？$s$, $j$["a.txt が documents という名前に変わる", "documents フォルダが削除される", "documents フォルダの中に a.txt のコピーができる", "エラーになる"]$j$::jsonb, 2, $s$コピー先がフォルダのときは、そのフォルダの中に同じ名前でコピーされます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$cp$s$), 'quiz', $s$cp$s$, $s$フォルダを中身ごとコピーするときに、つけるオプションはどれ？$s$, $j$["-a", "-f", "-d", "-r"]$j$::jsonb, 3, $s$-r は recursive（中身ごと繰り返す）の意味です。つけないと「-r not specified」というエラーになります。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$cp$s$), 'quiz', $s$cp$s$, $s$cp でコピーしたあと、元のファイルはどうなる？$s$, $j$["元のファイルは消える", "元のファイルは残る", "元のファイルは空になる", "元のファイルは読み取り専用になる"]$j$::jsonb, 1, $s$cp は複製を作るだけなので、元のファイルは残ります。元がなくなるのは mv です。$s$);
+ 
+  -- ========== mv ==========
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$mv$s$), 'quiz', $s$mv$s$, $s$a.txt を documents フォルダの中へ移動するコマンドはどれ？$s$, $j$["mv documents a.txt", "cp a.txt documents", "mv a.txt documents", "move a.txt documents"]$j$::jsonb, 2, $s$「mv 移動するもの 移動先」の順で書きます。cp だとコピーになります。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$mv$s$), 'quiz', $s$mv$s$, $s$mv で移動したあと、元の場所のファイルはどうなる？$s$, $j$["そのまま残る", "なくなる", "空になる", "名前が old に変わる"]$j$::jsonb, 1, $s$mv は「移動」なので、元の場所からはなくなります。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$mv$s$), 'quiz', $s$mv$s$, $s$cp と mv の違いとして、正しいのはどれ？$s$, $j$["cp は元が残り、mv は元がなくなる", "cp は元がなくなり、mv は元が残る", "cp はフォルダ用、mv はファイル用", "違いはない"]$j$::jsonb, 0, $s$cp は複製（元が残る）、mv は移動（元がなくなる）です。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$mv$s$), 'quiz', $s$mv$s$, $s$mv x.txt documents を実行すると「cannot stat 'x.txt': No such file or directory」と出た。原因はどれ？$s$, $j$["documents フォルダの中身が空", "mv にオプションが足りない", "x.txt というファイルが存在しない", "ホームフォルダにいない"]$j$::jsonb, 2, $s$「cannot stat」は、移動するファイルが見つからないという意味です。ls で名前や場所を確認しましょう。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$mv$s$), 'quiz', $s$mv$s$, $s$mv a.txt documents/b.txt を実行すると、どうなる？$s$, $j$["documents に a.txt をコピーする", "documents に移動して、b.txt に名前も変わる", "documents の中の b.txt が a.txt に変わる", "エラーになる"]$j$::jsonb, 1, $s$移動先にファイル名まで書くと、移動と同時に名前も変わります。$s$);
+ 
+  -- ========== rm ==========
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$rm$s$), 'quiz', $s$rm$s$, $s$ファイル old.txt を削除するコマンドはどれ？$s$, $j$["del old.txt", "rm old.txt", "rmdir old.txt", "remove old.txt"]$j$::jsonb, 1, $s$rm は remove の略で、ファイルを削除します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$rm$s$), 'quiz', $s$rm$s$, $s$rm -r の「-r」は、何を表している？$s$, $j$["read（読む）", "remove（消す）", "rename（名前を変える）", "recursive（中身ごと繰り返す）"]$j$::jsonb, 3, $s$-r は recursive の略で、フォルダの中身までまとめて処理します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$rm$s$), 'quiz', $s$rm$s$, $s$rm で削除したファイルについて、正しいのはどれ？$s$, $j$["ゴミ箱に入り、あとで戻せる", "1日たつと自動で復活する", "元に戻せないので注意が必要", "コピーが自動で作られる"]$j$::jsonb, 2, $s$rm には、ゴミ箱のような取り消しの仕組みはありません。消す前に、名前をよく確認しましょう。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$rm$s$), 'quiz', $s$rm$s$, $s$フォルダ dir を、-r をつけずに rm dir で削除しようとすると、どうなる？$s$, $j$["フォルダが削除される", "Is a directory というエラーが出る", "中身だけが削除される", "フォルダが空になる"]$j$::jsonb, 1, $s$フォルダを削除するときは、rm -r のように -r が必要です。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$rm$s$), 'quiz', $s$rm$s$, $s$a.txt と b.txt を、1つのコマンドでまとめて削除するにはどう書く？$s$, $j$["rm a.txt b.txt", "rm a.txt,b.txt", "rm a.txt && b.txt", "rm -2 a.txt b.txt"]$j$::jsonb, 0, $s$rm のあとに、ファイル名を半角スペースで区切って並べると、まとめて削除できます。$s$);
+end
+$seed2$;
