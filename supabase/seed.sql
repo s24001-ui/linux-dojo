@@ -108,28 +108,47 @@ do $seed$
 begin
   if exists (select 1 from questions) then return; end if;
 
-  -- 確認テスト
+  -- Linuxコマンド道場 確認テスト（ls / cd・pwd / mkdir・touch 各5問＝15問）
+-- INSERT文だけのファイル。使い方は2通り（delete は含まれていない）。
+--  ・seed.sql：do $seed$ ブロックの「-- 確認テスト」にある、ls・cd・mkdir の古い10問と置き換える
+--  ・すでに実行済みのDB：古い確認テストを delete してから、このINSERTを実行する（一度だけ）
+ 
+  -- ========== ls ==========
   insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
-    values ((select id from lessons where code=$s$ls$s$), 'quiz', $s$ls$s$, $s$いまいるフォルダの中身を一覧表示するコマンドはどれ？$s$, $j$["ls", "cd", "pwd", "cat"]$j$::jsonb, 0, $s$ls は list の略で、フォルダの中身を表示します。$s$);
+    values ((select id from lessons where code=$s$ls$s$), 'quiz', $s$ls$s$, $s$いまいるフォルダの中身を一覧で表示するコマンドはどれ？$s$, $j$["dir", "list", "ls", "show"]$j$::jsonb, 2, $s$ls は list の略で、フォルダの中身を表示します。$s$);
   insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
     values ((select id from lessons where code=$s$ls$s$), 'quiz', $s$ls$s$, $s$隠しファイルも表示したいとき、正しいのはどれ？$s$, $j$["ls -l", "ls -a", "ls -h", "ls -r"]$j$::jsonb, 1, $s$-a（all）をつけると、「.」で始まる隠しファイルも表示されます。$s$);
   insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
-    values ((select id from lessons where code=$s$cd$s$), 'quiz', $s$pwd$s$, $s$いまいる場所（カレントディレクトリ）を表示するコマンドは？$s$, $j$["where", "ls", "pwd", "cd"]$j$::jsonb, 2, $s$pwd は print working directory の略です。$s$);
+    values ((select id from lessons where code=$s$ls$s$), 'quiz', $s$ls$s$, $s$ls -l で表示されるものとして、正しいのはどれ？$s$, $j$["ファイルの名前だけ", "隠しファイルだけ", "種類やサイズなどの詳しい情報つきの一覧", "フォルダの削除結果"]$j$::jsonb, 2, $s$-l（long）をつけると、種類（ファイルかフォルダか）やサイズなどが1行ずつ表示されます。$s$);
   insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
-    values ((select id from lessons where code=$s$cd$s$), 'quiz', $s$cd$s$, $s$「..」が表すものはどれ？$s$, $j$["ホームフォルダ", "ひとつ上のフォルダ", "いまのフォルダ", "ルート"]$j$::jsonb, 1, $s$「..」は親（ひとつ上）のフォルダ、「.」はいまのフォルダです。$s$);
+    values ((select id from lessons where code=$s$ls$s$), 'quiz', $s$ls$s$, $s$documents フォルダへ移動せずに、その中身だけを見るコマンドはどれ？$s$, $j$["cd documents", "cat documents", "pwd documents", "ls documents"]$j$::jsonb, 3, $s$ls のあとにフォルダ名を書くと、移動せずにそのフォルダの中身を表示できます。$s$);
   insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
-    values ((select id from lessons where code=$s$cd$s$), 'quiz', $s$cd$s$, $s$ホームフォルダへ一発で戻るコマンドは？$s$, $j$["cd ..", "cd /", "cd ~", "cd -h"]$j$::jsonb, 2, $s$「~」はホームフォルダを表します。cd だけでも戻れます。$s$);
+    values ((select id from lessons where code=$s$ls$s$), 'quiz', $s$ls$s$, $s$名前が「.」で始まるファイル（例：.secret）は、ls だけで実行するとどうなる？$s$, $j$["表示されない（隠しファイルとして扱われる）", "そのまま表示される", "エラーになる", "削除される"]$j$::jsonb, 0, $s$「.」で始まるファイルは隠しファイルです。ls -a をつけると表示されます。$s$);
+ 
+  -- ========== cd・pwd ==========
   insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
-    values ((select id from lessons where code=$s$mkdir$s$), 'quiz', $s$mkdir$s$, $s$work という新しいフォルダを作るコマンドは？$s$, $j$["touch work", "mkdir work", "cd work", "new work"]$j$::jsonb, 1, $s$mkdir は make directory の略です。$s$);
+    values ((select id from lessons where code=$s$cd$s$), 'quiz', $s$pwd$s$, $s$いまいる場所（カレントディレクトリ）を表示するコマンドはどれ？$s$, $j$["whereami", "pwd", "cd", "ls"]$j$::jsonb, 1, $s$pwd は print working directory の略です。$s$);
   insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
-    values ((select id from lessons where code=$s$mkdir$s$), 'quiz', $s$touch$s$, $s$空のファイル memo.txt を作るコマンドは？$s$, $j$["mkdir memo.txt", "ls memo.txt", "touch memo.txt", "cat memo.txt"]$j$::jsonb, 2, $s$touch は、存在しないファイルを空で作成します。$s$);
+    values ((select id from lessons where code=$s$cd$s$), 'quiz', $s$cd$s$, $s$「..」が表すものはどれ？$s$, $j$["ひとつ上のフォルダ", "ホームフォルダ", "いまのフォルダ", "いちばん上のフォルダ（ルート）"]$j$::jsonb, 0, $s$「..」は親（ひとつ上）のフォルダ、「.」はいまのフォルダです。$s$);
   insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
-    values ((select id from lessons where code=$s$mkdir$s$), 'quiz', $s$cat$s$, $s$ファイルの中身を表示するコマンドは？$s$, $j$["cat", "rm", "mv", "cp"]$j$::jsonb, 0, $s$cat は、ファイルの内容をそのまま表示します。$s$);
+    values ((select id from lessons where code=$s$cd$s$), 'quiz', $s$cd$s$, $s$どこにいても、ホームフォルダへ一発で戻るコマンドはどれ？$s$, $j$["cd ..", "cd /", "cd -h", "cd ~"]$j$::jsonb, 3, $s$「~」はホームフォルダを表します。cd だけでも戻れます。$s$);
   insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
-    values ((select id from lessons where code=$s$mkdir$s$), 'quiz', $s$mv$s$, $s$ファイル a.txt を b.txt という名前に変えるコマンドは？$s$, $j$["cp a.txt b.txt", "mv a.txt b.txt", "rm a.txt b.txt", "cd a.txt b.txt"]$j$::jsonb, 1, $s$mv は移動のほか、名前の変更にも使います。$s$);
+    values ((select id from lessons where code=$s$cd$s$), 'quiz', $s$cd$s$, $s$documents フォルダの中にいるとき、ひとつ上のフォルダへ戻るコマンドはどれ？$s$, $j$["cd up", "cd documents", "cd ..", "cd /"]$j$::jsonb, 2, $s$cd .. で、ひとつ上のフォルダへ戻れます。$s$);
   insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
-    values ((select id from lessons where code=$s$mkdir$s$), 'quiz', $s$rm$s$, $s$フォルダ dir を中身ごと削除するときの正しい書き方は？$s$, $j$["rm dir", "rmdir -r dir", "rm -r dir", "del dir"]$j$::jsonb, 2, $s$フォルダを消すには rm に -r（再帰）をつけます。$s$);
-
+    values ((select id from lessons where code=$s$cd$s$), 'quiz', $s$pwd$s$, $s$ホームフォルダ（/home/student）にいるときに cd documents を実行し、そのあと pwd を実行すると、何が表示される？$s$, $j$["/home/student", "/home/student/documents", "/documents", "documents"]$j$::jsonb, 1, $s$pwd は、いまいる場所を「/」から始まるフルパスで表示します。$s$);
+ 
+  -- ========== mkdir・touch ==========
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$mkdir$s$), 'quiz', $s$mkdir$s$, $s$project という新しいフォルダを作るコマンドはどれ？$s$, $j$["touch project", "cd project", "mkdir project", "new project"]$j$::jsonb, 2, $s$mkdir は make directory の略です。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$mkdir$s$), 'quiz', $s$touch$s$, $s$空のファイル memo.txt を作るコマンドはどれ？$s$, $j$["mkdir memo.txt", "touch memo.txt", "ls memo.txt", "cat memo.txt"]$j$::jsonb, 1, $s$touch は、存在しないファイルを空で作成します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$mkdir$s$), 'quiz', $s$mkdir$s$, $s$work フォルダがまだないとき、work/src を親のフォルダごとまとめて作るコマンドはどれ？$s$, $j$["mkdir work/src", "mkdir -p work/src", "touch work/src", "mkdir -r work/src"]$j$::jsonb, 1, $s$-p をつけると、途中の親フォルダもまとめて作ります。つけないと「No such file or directory」になります。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$mkdir$s$), 'quiz', $s$touch$s$, $s$すでに中身のある memo.txt があるとき、touch memo.txt を実行すると、どうなる？$s$, $j$["中身が空になる", "エラーになる", "中身は変わらない", "別の名前のファイルが作られる"]$j$::jsonb, 2, $s$touch は、すでにあるファイルの中身は消しません。ないときだけ空のファイルを作ります。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$mkdir$s$), 'quiz', $s$mkdir$s$, $s$すでにある project フォルダと同じ名前で mkdir project を実行すると、どうなる？$s$, $j$["File exists というエラーが出る", "中身が消える", "上書きされる", "project2 という名前で作られる"]$j$::jsonb, 0, $s$同じ名前がすでにあると「File exists」というエラーになります。ls で確認しましょう。$s$);
+ 
   -- 実技テスト
   insert into questions (lesson_id, question_type, command_tag, title, body, setup_data)
     values ((select id from lessons where code=$s$ls$s$), 'practical', $s$cp$s$, $s$実技テスト：ls$s$, $s$documents フォルダの中に、memo.txt をコピーしてください（元の memo.txt は残すこと）。$s$, $j${"fs": {"dirs": ["work"], "files": {"memo.txt": "あとで読む", ".secret": "ひみつ", "documents/report.txt": "レポート"}}, "checks": [{"label": "documents に memo.txt がありません", "files": ["documents/memo.txt"]}, {"label": "元の memo.txt が消えています", "files": ["memo.txt"]}]}$j$::jsonb);
