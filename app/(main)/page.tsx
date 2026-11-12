@@ -50,7 +50,7 @@ async function Top() {
                     <span className="font-bold">{no}. {l.title}</span>
                     <span className="flex shrink-0 items-center gap-3 text-sm">
                       <span className={`badge ${cleared.has(l.code) ? 'badge-ok' : 'badge-ng'}`}>{cleared.has(l.code) ? 'クリア済み' : '未クリア'}</span>
-                      <span className="w-14 text-right font-mono">{best[l.code] != null ? `${best[l.code]} / ${QUIZ_SIZE}` : '－'}</span>
+                      <span className="w-14 text-right font-mono">{best[l.code] != null ? `${best[l.code]}/${QUIZ_SIZE}` : '－'}</span>
                     </span>
                   </Link>
                 </li>
