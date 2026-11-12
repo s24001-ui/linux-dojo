@@ -131,6 +131,66 @@ const commands: Record<string, (e: Env) => void> = {
     e.fs = { ...e.fs, [t]: old + e.rest.slice(0, i).join(' ') + '\n' }
   },
 
+  find(e) {
+    // サポート: find [dir] -name "*.txt"
+    let dir = e.args[0] ?? '.';
+    let nameIdx = e.rest.findIndex((x) => x === '-name');
+    let pattern = nameIdx >= 0 ? e.rest[nameIdx + 1] : undefined;
+    if (!pattern) return e.err('find: missing pattern');
+    dir = e.R(dir);
+    if (!isDir(e.fs, dir)) return e.err(`find: '${e.args[0] ?? '.'}': No such directory`);
+    // パターンが *.txt の場合のみ対応
+    const regex = pattern === '*.txt' ? /\.txt$/ : null;
+    if (!regex) return e.err('find: only "*.txt" pattern supported');
+    for (const k of Object.keys(e.fs)) {
+      if (isFile(e.fs, k) && k.startsWith(dir + '/') && regex.test(baseOf(k))) {
+        // 相対パスで表示
+        e.say('.' + k.slice(e.cwd.length));
+      }
+    }
+  },
+
+  head(e) {
+    // head -n N ファイル名
+    let n = 10;
+    let fileArg = e.args[0];
+    if (e.rest[0] === '-n' && e.rest[2]) {
+      n = parseInt(e.rest[1], 10) || 10;
+      fileArg = e.rest[2];
+    }
+    const t = e.R(fileArg ?? '');
+    if (!fileArg || !exists(e.fs, t)) return e.err(`head: cannot open '${fileArg}': No such file or directory`);
+    if (isDir(e.fs, t)) return e.err(`head: error reading '${fileArg}': Is a directory`);
+    const lines = (e.fs[t] as string).split('\n');
+    lines.slice(0, n).forEach(l => e.say(l));
+  },
+
+  grep(e) {
+    // grep パターン ファイル名
+    if (e.args.length < 2) return e.err('grep: missing file operand');
+    const pattern = e.args[0];
+    const t = e.R(e.args[1]);
+    if (!exists(e.fs, t)) return e.err(`grep: ${e.args[1]}: No such file or directory`);
+    if (isDir(e.fs, t)) return e.err(`grep: ${e.args[1]}: Is a directory`);
+    const regex = new RegExp(pattern);
+    (e.fs[t] as string).split('\n').forEach(l => { if (regex.test(l)) e.say(l); });
+  },
+
+  wc(e) {
+    // wc -l ファイル名
+    if (e.rest[0] === '-l' && e.args[1]) {
+      const t = e.R(e.args[1]);
+      if (!exists(e.fs, t)) return e.err(`wc: ${e.args[1]}: No such file or directory`);
+      if (isDir(e.fs, t)) return e.err(`wc: ${e.args[1]}: Is a directory`);
+      const count = (e.fs[t] as string).split('\n').filter(Boolean).length;
+      e.say(count.toString());
+    } else {
+      // パイプ対応: 標準入力（前コマンドの出力）を想定
+      // この簡易実装では未対応
+      e.err('wc: only "wc -l ファイル名" supported');
+    }
+  },
+
   ls(e) {
     const arg = e.args[0]
     const t = e.R(arg ?? '.')

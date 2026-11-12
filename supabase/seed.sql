@@ -547,3 +547,59 @@ insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, s
 values ((select id from lessons where code=$s$git-pull$s$), 5, $s$git log --oneline と git status で、更新後の履歴と状態を確認しましょう。$s$, $s$新しいコミットが増え、作業ツリーが clean になっていれば成功です。$s$, $j${"commands":["^git\\s+log\\s+--oneline$","^git\\s+status$"],"files":["linux-dojo/CHANGELOG.md"]}$j$::jsonb, null)
 on conflict (lesson_id, step_number) do update
 set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+
+-- エラー修復ミッション・シナリオの追加（seed.sql の末尾に貼り付けるか、SQL Editor で単独で実行する）
+-- 何度実行しても、同じタイトルのものは重複して入らない。すでにある問題・回答履歴には影響しない。
+-- （seed.sql の最初の do $seed$ ブロックは、questions が空でないと何もしないので、追加分はこのように別に書く）
+--
+-- 【以前の版を実行済みの場合のみ】既存の課題と内容が近かった次の3つは、この版で入れ替えた。
+--   不要なら、下の3行（先頭の -- を外す）を実行して消してよい。そのタイトルの回答履歴も一緒に消える。
+-- delete from questions where question_type = 'repair'   and title = 'ファイルが作れない';
+-- delete from questions where question_type = 'scenario' and title = 'ログを整理しよう';
+-- delete from questions where question_type = 'scenario' and title = '名前をそろえて整理しよう';
+
+-- ========== エラー修復ミッション ==========
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$cp$s$, $s$フォルダがコピーできない$s$, $s$documents フォルダを backup にコピーしようとしたら、エラーが出ました。$s$, $j${"fs": {"files": {"documents/report.txt": "レポート", "documents/memo.txt": "メモ"}}, "error": {"cmd": "cp documents backup", "msg": "cp: -r not specified; omitting directory 'documents'"}, "hints": ["エラーは「フォルダは、そのままではコピーできない」という意味です。", "フォルダを中身ごとコピーするには、オプションを1つ足します。", "cp -r documents backup を実行しましょう。（-r は recursive：中身ごと）"], "checks": [{"files": ["backup/report.txt", "backup/memo.txt", "documents/report.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$フォルダがコピーできない$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$rm$s$, $s$フォルダが消せない$s$, $s$temp フォルダを削除しようとしたら、エラーが出ました。$s$, $j${"fs": {"files": {"temp/a.txt": "一時ファイル", "temp/b.txt": "一時ファイル", "memo.txt": "残すメモ"}}, "error": {"cmd": "rm temp", "msg": "rm: cannot remove 'temp': Is a directory"}, "hints": ["エラーは「temp はフォルダなので、そのままでは消せない」という意味です。", "フォルダは、中身ごと消す指定が必要です。", "rm -r temp を実行しましょう。（消したものは戻せません。memo.txt は消さないこと）"], "checks": [{"absent": ["temp", "temp/a.txt", "temp/b.txt"], "files": ["memo.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$フォルダが消せない$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$cd$s$, $s$フォルダ名の綴りが違う$s$, $s$documents フォルダへ移動しようとしたら、エラーが出ました。$s$, $j${"fs": {"dirs": ["work"], "files": {"documents/report.txt": "レポート"}}, "error": {"cmd": "cd documnts", "msg": "bash: cd: documnts: No such file or directory"}, "hints": ["エラーは「documnts というフォルダがない」という意味です。", "入力した名前をよく見てください。綴りが違います。ls で、正しい名前を確認できます。", "cd documents を実行しましょう。"], "checks": [{"cwd": "~/documents"}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$フォルダ名の綴りが違う$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$mkdir$s$, $s$同じ名前がもうある$s$, $s$project フォルダを作ろうとしたら、エラーが出ました。$s$, $j${"fs": {"files": {"project/readme.txt": "はじめに"}}, "error": {"cmd": "mkdir project", "msg": "mkdir: cannot create directory ‘project’: File exists"}, "hints": ["エラーは「project はすでにある」という意味です。", "作り直す必要はありません。すでにある project フォルダの中に入りましょう。", "cd project を実行しましょう。"], "checks": [{"cwd": "~/project"}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$同じ名前がもうある$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$mv$s$, $s$移動先が足りない$s$, $s$a.txt を documents フォルダへ移動しようとしたら、エラーが出ました。$s$, $j${"fs": {"dirs": ["documents"], "files": {"a.txt": "a"}}, "error": {"cmd": "mv a.txt", "msg": "mv: missing destination file operand after 'a.txt'"}, "hints": ["エラーは「移動先が書かれていない」という意味です。", "mv は「mv 移動するもの 移動先」のように、2つ指定する必要があります。", "mv a.txt documents を実行しましょう。"], "checks": [{"files": ["documents/a.txt"], "absent": ["a.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$移動先が足りない$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$cd$s$, $s$ファイルには入れない$s$, $s$memo.txt を開こうとして cd を使ったら、エラーが出ました。$s$, $j${"fs": {"files": {"memo.txt": "あとで読む"}}, "error": {"cmd": "cd memo.txt", "msg": "bash: cd: memo.txt: Not a directory"}, "hints": ["エラーは「memo.txt はフォルダではない」という意味です。", "cd は、フォルダに移動するコマンドです。ファイルの中身を見たいときは、別のコマンドを使います。", "cat memo.txt を実行しましょう。"], "checks": [{"commands": ["^cat\\s+memo\\.txt$"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$ファイルには入れない$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$grep$s$, $s$grep でファイルが見つからない$s$, $s$app.log から error を探そうとしたら、エラーが出ました。$s$, $j${"fs": {"files": {"logs/app.log": "start\nerror: disk full\nok"}}, "error": {"cmd": "grep error app.log", "msg": "grep: app.log: No such file or directory"}, "hints": ["エラーは「app.log というファイルがない」という意味です。", "app.log は、いまいる場所ではなく、logs フォルダの中にあります。ls logs で確認できます。", "grep error logs/app.log を実行しましょう。（フォルダ名から続けて書きます）"], "checks": [{"commands": ["^grep\\s+(-\\w+\\s+)*error\\s+logs/app\\.log$"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$grep でファイルが見つからない$s$);
+
+-- ========== シナリオ ==========
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'scenario', $s$mkdir$s$, $s$プロジェクトの土台を作ろう$s$, $s$新しいアプリ myapp の作業を始めます。フォルダとファイルで、プロジェクトの骨組みを作りましょう。$s$, $j${"summary": "フォルダとファイルで、プロジェクトの骨組みを作る", "commands": "mkdir -p / touch", "fs": {}, "goals": [{"label": "myapp/src と myapp/docs フォルダを作る", "hints": ["フォルダを作るコマンドは？ 親の myapp も、まだありません。", "mkdir -p を使うと、親のフォルダもまとめて作れます。", "mkdir -p myapp/src / mkdir -p myapp/docs"], "dirs": ["myapp/src", "myapp/docs"]}, {"label": "myapp/README.txt を作る", "hints": ["空のファイルを作るコマンドは？", "touch のあとに、ファイルのパスを書きます。", "touch myapp/README.txt"], "files": ["myapp/README.txt"]}, {"label": "myapp/src/main.txt を作る", "hints": ["さっきと同じコマンドを使います。", "touch のあとに、フォルダ名から続けて書きます。", "touch myapp/src/main.txt"], "files": ["myapp/src/main.txt"]}], "checks": [{"dirs": ["myapp/src", "myapp/docs"], "files": ["myapp/README.txt", "myapp/src/main.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'scenario' and title = $s$プロジェクトの土台を作ろう$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'scenario', $s$echo$s$, $s$メモを書いて控えを作ろう$s$, $s$大事なメモを書いて、念のため控え（コピー）も作ります。最後に、控えの中身が正しいか確かめましょう。$s$, $j${"summary": "文字をファイルに書き、控えを作って、中身を確かめる", "commands": "echo / cp / cat", "fs": {}, "goals": [{"label": "echo で、memo.txt に文字を書き込む", "hints": ["画面に文字を出すコマンドを、ファイルへの書き込みに使います。", "「>」をつけると、画面の代わりにファイルへ書き込めます。", "echo hello > memo.txt"], "commands": ["^echo\\s+.+\\s*>\\s*memo\\.txt$"], "files": ["memo.txt"]}, {"label": "memo.txt を memo_backup.txt という名前でコピーする", "hints": ["コピーのコマンドは？", "cp のあとに「コピー元」「コピー先」の順で書きます。", "cp memo.txt memo_backup.txt"], "files": ["memo.txt", "memo_backup.txt"]}, {"label": "cat で、memo_backup.txt の中身を表示して確かめる", "hints": ["ファイルの中身を見るコマンドは？", "cat のあとに、ファイル名を書きます。", "cat memo_backup.txt"], "commands": ["^cat\\s+memo_backup\\.txt$"]}], "checks": [{"files": ["memo.txt", "memo_backup.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'scenario' and title = $s$メモを書いて控えを作ろう$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'scenario', $s$grep$s$, $s$ログからエラーを探そう$s$, $s$app.log に、システムの記録が残っています。先頭を確認し、error の行だけを取り出して、何件あるか数えましょう。$s$, $j${"summary": "ログの先頭を見て、error を探し、件数を数える", "commands": "head / grep / wc / パイプ", "fs": {"files": {"app.log": "start\nerror: disk full\nok\nwarn: slow\nerror: timeout\nok\nend"}}, "goals": [{"label": "app.log の先頭の3行を表示する", "hints": ["ファイルの先頭だけを見るコマンドは？", "行数は「-n 数字」で指定できます。", "head -n 3 app.log"], "commands": ["^head\\s+(-n\\s*3|-3)\\s+app\\.log$"]}, {"label": "app.log から、error を含む行だけを表示する", "hints": ["文字を探すコマンドは？", "「grep 探す文字 ファイル名」の順で書きます。", "grep error app.log"], "commands": ["^grep\\s+(-\\w+\\s+)*error\\s+app\\.log$"]}, {"label": "error の行が何件あるか数える", "hints": ["grep の結果を、行数を数えるコマンドに渡します。", "「|」でつなぎます。行数は wc -l で数えます。（grep -c でも数えられます）", "grep error app.log | wc -l"], "commands": ["^(grep\\s+error\\s+app\\.log\\s*\\|\\s*wc\\s+-l|grep\\s+-c\\s+error\\s+app\\.log|cat\\s+app\\.log\\s*\\|\\s*grep\\s+error\\s*\\|\\s*wc\\s+-l)$"]}], "checks": []}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'scenario' and title = $s$ログからエラーを探そう$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'scenario', $s$find$s$, $s$テキストファイルを集めよう$s$, $s$あちこちにある .txt ファイルを、1か所にまとめます。まず find で探し、texts フォルダを作って、見つけたファイルをすべて移しましょう。$s$, $j${"summary": "find で探したファイルを、1つのフォルダに集める", "commands": "find / mkdir / mv", "fs": {"files": {"memo.txt": "メモ", "documents/report.txt": "レポート", "documents/notes.txt": "買い物メモ", "photos/a.jpg": ""}}, "goals": [{"label": "find で、.txt のファイルを探して表示する", "hints": ["名前でファイルを探すコマンドは？", "「find 場所 -name パターン」の形です。「.」はいまのフォルダ、「*」はどんな文字にもあてはまります。", "find . -name \"*.txt\""], "commands": ["^find\\s+\\.\\s+-name\\s+[\"']?\\*\\.txt[\"']?$"]}, {"label": "texts フォルダを作る", "hints": ["フォルダを作るコマンドは？", "mkdir のあとに、フォルダ名を書きます。", "mkdir texts"], "dirs": ["texts"]}, {"label": "見つけた3つの .txt を、すべて texts に移動する", "hints": ["移動は mv を使います。ファイルごとに1回ずつ実行します。", "documents の中のファイルは「documents/ファイル名」と書きます。", "mv memo.txt texts / mv documents/report.txt texts / mv documents/notes.txt texts"], "files": ["texts/memo.txt", "texts/report.txt", "texts/notes.txt"], "absent": ["memo.txt", "documents/report.txt", "documents/notes.txt"]}], "checks": [{"files": ["texts/memo.txt", "texts/report.txt", "texts/notes.txt", "photos/a.jpg"], "absent": ["memo.txt", "documents/report.txt", "documents/notes.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'scenario' and title = $s$テキストファイルを集めよう$s$);
