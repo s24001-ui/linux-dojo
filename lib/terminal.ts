@@ -48,6 +48,7 @@ export function resolve(cwd: string, p: string): string {
 
 const parentOf = (p: string) => p.replace(/\/[^/]*$/, '') || '/'
 const baseOf = (p: string) => p.split('/').pop() ?? ''
+const linesOf = (content: string) => content === '' ? [] : content.replace(/\n$/, '').split('\n')
 const childrenOf = (fs: Fs, dir: string) =>
   Object.keys(fs).filter((k) => k !== '/' && k !== dir && parentOf(k) === dir).map(baseOf).sort()
 
@@ -109,6 +110,8 @@ type Env = {
   args: string[] // オプション以外の引数
   flags: string // 「-al」→「al」
   rest: string[] // 引数すべて（echo 用）
+  stdin?: string[]
+  piped?: boolean
   R: (p: string) => string // cwd から絶対パスへ
   say: (t: string) => void
   err: (t: string) => void
@@ -161,28 +164,60 @@ const commands: Record<string, (e: Env) => void> = {
     const t = e.R(fileArg ?? '');
     if (!fileArg || !exists(e.fs, t)) return e.err(`head: cannot open '${fileArg}': No such file or directory`);
     if (isDir(e.fs, t)) return e.err(`head: error reading '${fileArg}': Is a directory`);
-    const lines = (e.fs[t] as string).split('\n');
+    const lines = linesOf(e.fs[t] as string);
     lines.slice(0, n).forEach(l => e.say(l));
+  },
+
+  tail(e) {
+    // tail -n N ファイル名 / tail -N ファイル名
+    let n = 10;
+    let fileArg = e.args[0];
+    if (e.rest[0] === '-n' && e.rest[2]) {
+      n = parseInt(e.rest[1], 10) || 10;
+      fileArg = e.rest[2];
+    } else if (/^-\d+$/.test(e.rest[0] ?? '') && e.rest[1]) {
+      n = parseInt(e.rest[0].slice(1), 10);
+      fileArg = e.rest[1];
+    }
+    const t = e.R(fileArg ?? '');
+    if (!fileArg || !exists(e.fs, t)) return e.err(`tail: cannot open '${fileArg}': No such file or directory`);
+    if (isDir(e.fs, t)) return e.err(`tail: error reading '${fileArg}': Is a directory`);
+    const lines = linesOf(e.fs[t] as string);
+    lines.slice(-n).forEach(l => e.say(l));
   },
 
   grep(e) {
     // grep パターン ファイル名
-    if (e.args.length < 2) return e.err('grep: missing file operand');
     const pattern = e.args[0];
+    if (!pattern) return e.err('grep: missing file operand');
+    let regex: RegExp;
+    try {
+      regex = new RegExp(pattern);
+    } catch {
+      return e.err(`grep: invalid regular expression: ${pattern}`);
+    }
+    if (e.stdin && e.args.length === 1) {
+      return e.stdin.forEach((line, i) => { if (regex.test(line)) e.say(e.flags.includes('n') ? `${i + 1}:${line}` : line); });
+    }
+    if (e.args.length < 2) return e.err('grep: missing file operand');
     const t = e.R(e.args[1]);
     if (!exists(e.fs, t)) return e.err(`grep: ${e.args[1]}: No such file or directory`);
     if (isDir(e.fs, t)) return e.err(`grep: ${e.args[1]}: Is a directory`);
-    const regex = new RegExp(pattern);
-    (e.fs[t] as string).split('\n').forEach(l => { if (regex.test(l)) e.say(l); });
+    linesOf(e.fs[t] as string).forEach((line, i) => {
+      if (regex.test(line)) e.say(e.flags.includes('n') ? `${i + 1}:${line}` : line);
+    });
   },
 
   wc(e) {
     // wc -l ファイル名
-    if (e.rest[0] === '-l' && e.args[1]) {
-      const t = e.R(e.args[1]);
-      if (!exists(e.fs, t)) return e.err(`wc: ${e.args[1]}: No such file or directory`);
-      if (isDir(e.fs, t)) return e.err(`wc: ${e.args[1]}: Is a directory`);
-      const count = (e.fs[t] as string).split('\n').filter(Boolean).length;
+    if (e.rest[0] === '-l' && e.stdin && !e.rest[1]) {
+      e.say(e.stdin.length.toString());
+    } else if (e.rest[0] === '-l' && e.rest[1]) {
+      const fileArg = e.rest[1];
+      const t = e.R(fileArg);
+      if (!exists(e.fs, t)) return e.err(`wc: ${fileArg}: No such file or directory`);
+      if (isDir(e.fs, t)) return e.err(`wc: ${fileArg}: Is a directory`);
+      const count = linesOf(e.fs[t] as string).length;
       e.say(count.toString());
     } else {
       // パイプ対応: 標準入力（前コマンドの出力）を想定
@@ -205,7 +240,10 @@ const commands: Record<string, (e: Env) => void> = {
         const size = dir ? 4096 : (e.fs[`${t}/${n}`] as string).length
         e.say(`${dir ? 'drwxr-xr-x' : '-rw-r--r--'} 1 student student ${String(size).padStart(4)} Nov  5 10:00 ${n}`)
       }
-    } else if (names.length) e.say(names.join('  '))
+    } else if (names.length) {
+      if (e.piped) names.forEach((name) => e.say(name))
+      else e.say(names.join('  '))
+    }
   },
 
   cd(e) {
@@ -711,7 +749,7 @@ function gitMerge(e: Env, root: string) {
   const refs = readBranches(e.fs, root)
   const current = currentBranch(e.fs, root)
   if (!(name in refs)) return e.err(`merge: ${name} - not something we can merge`)
-  if (name === current) return e.err('Already up to date.')
+  if (name === current) return e.say('Already up to date.')
   const ours = headCommit(e.fs, root, current)
   const theirs = headCommit(e.fs, root, name)
   if (!theirs) return e.err(`merge: ${name} has no commits`)
@@ -896,10 +934,10 @@ export function tokenize(input: string): string[] {
 
 export type Result = { state: TermState; out: Line[]; clear?: boolean; error?: boolean }
 
-export function exec(state: TermState, input: string): Result {
+function execSingle(state: TermState, tokens: string[], stdin?: string[], piped = false): Result {
   const out: Line[] = []
   let error = false
-  const [cmd, ...rest] = tokenize(input)
+  const [cmd, ...rest] = tokens
   if (!cmd) return { state, out }
   if (cmd === 'clear') return { state, out, clear: true }
 
@@ -907,6 +945,8 @@ export function exec(state: TermState, input: string): Result {
     fs: state.fs,
     cwd: state.cwd,
     rest,
+    stdin,
+    piped,
     args: rest.filter((a) => !/^-[A-Za-z]+$/.test(a)),
     flags: rest.filter((a) => /^-[A-Za-z]+$/.test(a)).map((a) => a.slice(1)).join(''),
     R: (p) => resolve(state.cwd, p),
@@ -927,4 +967,28 @@ export function exec(state: TermState, input: string): Result {
     if (s) out.push({ kind: 'note', text: `💡 もしかして：${s}` })
   }
   return { state: { fs: env.fs, cwd: env.cwd }, out, error }
+}
+
+export function exec(state: TermState, input: string): Result {
+  const tokens = tokenize(input)
+  const pipeAt = tokens.indexOf('|')
+  if (pipeAt < 0) return execSingle(state, tokens)
+
+  let current = execSingle(state, tokens.slice(0, pipeAt), undefined, true)
+  let inputLines = current.out.filter((line) => line.kind === 'out').map((line) => line.text)
+  let next = pipeAt + 1
+  while (next < tokens.length) {
+    const nextPipe = tokens.indexOf('|', next)
+    const end = nextPipe < 0 ? tokens.length : nextPipe
+    const result = execSingle(current.state, tokens.slice(next, end), inputLines, true)
+    current = {
+      state: result.state,
+      out: [...current.out.filter((line) => line.kind !== 'out'), ...result.out],
+      error: current.error || result.error,
+    }
+    inputLines = result.out.filter((line) => line.kind === 'out').map((line) => line.text)
+    if (nextPipe < 0) break
+    next = nextPipe + 1
+  }
+  return current
 }
