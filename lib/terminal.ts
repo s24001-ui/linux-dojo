@@ -233,16 +233,15 @@ function copyMove(e: Env, name: 'cp' | 'mv') {
      .git/index   … ステージ（git add 済み）のファイル一覧。JSON：{ "相対パス": "中身" }
      .git/commits … コミットの履歴。JSON：[{ id, msg, date, tree }]（tree は、そのときの全ファイル）
    ブラウザの中だけで動く。本物の git や通信は使わない。
-   対応：init / status / add / commit（-m, -am）/ log（--oneline）/ diff（--staged）/ config（何もしない） */
+   対応：init / status / add / commit / log / diff / branch / switch / merge / remote / push / pull / clone（すべて疑似動作） */
 
 type Tree = Record<string, string> // リポジトリのルートからの相対パス → ファイルの中身
-type Commit = { id: string; msg: string; date: string; tree: Tree }
+type Commit = { id: string; msg: string; date: string; tree: Tree; parents?: string[] }
 type Op = { t: ' ' | '+' | '-'; s: string }
 
-const BRANCH = 'main'
 const BLANK = ' ' // 空行（空文字だと高さがなくなるので、空白を1つ入れる）
-const GIT_SUBS = ['init', 'status', 'add', 'commit', 'log', 'diff']
-const GIT_LATER = ['branch', 'checkout', 'switch', 'merge', 'remote', 'push', 'pull', 'clone', 'fetch', 'restore', 'reset', 'stash', 'rm', 'mv', 'tag', 'show']
+const GIT_SUBS = ['init', 'status', 'add', 'commit', 'log', 'diff', 'branch', 'checkout', 'switch', 'merge', 'remote', 'push', 'pull', 'clone']
+const GIT_LATER = ['fetch', 'restore', 'reset', 'stash', 'rm', 'mv', 'tag', 'show']
 
 // 文字列から16進のハッシュを作る（コミットIDなどに使う。本物のSHA-1ではない）
 function hash(s: string, seed = 0): string {
@@ -290,6 +289,43 @@ function readJson<T>(fs: Fs, path: string, fallback: T): T {
 }
 const readIndex = (fs: Fs, root: string) => readJson<Tree>(fs, gitFile(root, 'index'), {})
 const readCommits = (fs: Fs, root: string) => readJson<Commit[]>(fs, gitFile(root, 'commits'), [])
+type BranchMap = Record<string, string | null>
+const readBranches = (fs: Fs, root: string): BranchMap => {
+  const saved = readJson<BranchMap | null>(fs, gitFile(root, 'branches'), null)
+  if (saved) return saved
+  const commits = readCommits(fs, root)
+  return { main: commits.at(-1)?.id ?? null }
+}
+const currentBranch = (fs: Fs, root: string) => {
+  const head = fs[gitFile(root, 'HEAD')]
+  const match = typeof head === 'string' ? head.match(/refs\/heads\/([^\s]+)/) : null
+  return match?.[1] ?? 'main'
+}
+const branchCommits = (fs: Fs, root: string, branch = currentBranch(fs, root)): Commit[] => {
+  const all = readCommits(fs, root)
+  const refs = readBranches(fs, root)
+  let id = refs[branch] ?? null
+  const found: Commit[] = []
+  const seen = new Set<string>()
+  while (id && !seen.has(id)) {
+    seen.add(id)
+    const commit = all.find((c) => c.id === id)
+    if (!commit) break
+    found.push(commit)
+    id = commit.parents ? (commit.parents[0] ?? null) : (all[all.indexOf(commit) - 1]?.id ?? null)
+  }
+  return found.reverse()
+}
+const headCommit = (fs: Fs, root: string, branch = currentBranch(fs, root)) => {
+  const commits = branchCommits(fs, root, branch)
+  return commits.at(-1)
+}
+const remoteNameFromUrl = (url: string) => {
+  const part = url.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? 'repository'
+  return part.replace(/\.git$/i, '') || 'repository'
+}
+const remoteStorePath = (name: string) => `${HOME}/.sim-remotes/${name}.json`
+type RemoteSnapshot = { defaultBranch: string; branches: BranchMap; commits: Commit[]; files?: Tree; pullUpdate?: { branch: string; commit: Commit; baseTree?: Tree } }
 
 // 作業フォルダにあるファイル（.git の中は除く）
 function workTree(fs: Fs, root: string): Tree {
@@ -385,10 +421,13 @@ function compare(head: Tree, index: Tree, work: Tree) {
 
 // git status の表示
 function statusLines(fs: Fs, root: string, cwd: string, index = readIndex(fs, root)): string[] {
-  const commits = readCommits(fs, root)
+  const commits = branchCommits(fs, root)
+  const branch = currentBranch(fs, root)
   const st = compare(commits.at(-1)?.tree ?? {}, index, workTree(fs, root))
   const show = (rel: string) => relTo(cwd, `${base(root)}/${rel}`)
-  const out = [`On branch ${BRANCH}`]
+  const out = [`On branch ${branch}`]
+  const tracking = readJson<Record<string, string>>(fs, gitFile(root, 'tracking'), {})
+  if (tracking[branch]) out.push(`Your branch is up to date with '${tracking[branch]}'.`)
   if (!commits.length) out.push(BLANK, 'No commits yet')
   if (st.staged.length) {
     out.push(BLANK, 'Changes to be committed:', commits.length ? '  (use "git restore --staged <file>..." to unstage)' : '  (use "git rm --cached <file>..." to unstage)')
@@ -430,9 +469,10 @@ function gitInit(e: Env) {
     return
   }
   next[`${base(dir)}/.git`] = null
-  next[gitFile(dir, 'HEAD')] = `ref: refs/heads/${BRANCH}\n`
+  next[gitFile(dir, 'HEAD')] = `ref: refs/heads/main\n`
   next[gitFile(dir, 'index')] = '{}'
   next[gitFile(dir, 'commits')] = '[]'
+  next[gitFile(dir, 'branches')] = JSON.stringify({ main: null })
   e.fs = next
   e.say(`Initialized empty Git repository in ${base(dir)}/.git/`)
 }
@@ -476,7 +516,9 @@ function gitCommit(e: Env, root: string) {
       msg = a[++i]
     } else if (a[i] === '-a') all = true
   }
-  const commits = readCommits(e.fs, root)
+  const commits = branchCommits(e.fs, root)
+  const allCommits = readCommits(e.fs, root)
+  const branch = currentBranch(e.fs, root)
   const head = commits.at(-1)?.tree ?? {}
   const work = workTree(e.fs, root)
   const index = { ...readIndex(e.fs, root) }
@@ -496,8 +538,14 @@ function gitCommit(e: Env, root: string) {
   if (!msg) return e.err('Aborting commit due to empty commit message.')
 
   const parent = commits.at(-1)
-  const id = sha(JSON.stringify({ parent: parent?.id ?? null, msg, tree: index }))
-  e.fs = { ...e.fs, [gitFile(root, 'commits')]: JSON.stringify([...commits, { id, msg, date: gitDate(), tree: index }]), [gitFile(root, 'index')]: JSON.stringify(index) }
+  const id = sha(JSON.stringify({ parent: parent?.id ?? null, msg, tree: index, time: gitDate() }))
+  const commit: Commit = { id, msg, date: gitDate(), tree: index, parents: parent ? [parent.id] : [] }
+  const refs = { ...readBranches(e.fs, root), [branch]: id }
+  e.fs = { ...e.fs,
+    [gitFile(root, 'commits')]: JSON.stringify([...allCommits, commit]),
+    [gitFile(root, 'branches')]: JSON.stringify(refs),
+    [gitFile(root, 'index')]: JSON.stringify(index)
+  }
 
   let ins = 0
   let del = 0
@@ -508,7 +556,7 @@ function gitCommit(e: Env, root: string) {
     }
   }
   const n = changed.length
-  e.say(`[${BRANCH}${parent ? '' : ' (root-commit)'} ${id.slice(0, 7)}] ${msg}`)
+  e.say(`[${branch}${parent ? '' : ' (root-commit)'} ${id.slice(0, 7)}] ${msg}`)
   e.say(` ${n} file${n > 1 ? 's' : ''} changed` + (!ins && !del ? ', 0 insertions(+), 0 deletions(-)' : '') + (ins ? `, ${ins} insertion${ins > 1 ? 's' : ''}(+)` : '') + (del ? `, ${del} deletion${del > 1 ? 's' : ''}(-)` : ''))
   for (const p of changed) {
     if (head[p] === undefined) e.say(` create mode 100644 ${p}`)
@@ -517,10 +565,11 @@ function gitCommit(e: Env, root: string) {
 }
 
 function gitLog(e: Env, root: string) {
-  const commits = readCommits(e.fs, root)
-  if (!commits.length) return e.err(`fatal: your current branch '${BRANCH}' does not have any commits yet`)
+  const commits = branchCommits(e.fs, root)
+  const branch = currentBranch(e.fs, root)
+  if (!commits.length) return e.err(`fatal: your current branch '${branch}' does not have any commits yet`)
   const oneline = e.rest.includes('--oneline')
-  const tip = `(HEAD -> ${BRANCH})`
+  const tip = `(HEAD -> ${branch})`
   commits
     .map((c, i) => ({ c, latest: i === commits.length - 1 }))
     .reverse()
@@ -538,7 +587,7 @@ function gitLog(e: Env, root: string) {
 function gitDiff(e: Env, root: string) {
   const index = readIndex(e.fs, root)
   if (e.rest.includes('--staged') || e.rest.includes('--cached')) {
-    return diffTrees(readCommits(e.fs, root).at(-1)?.tree ?? {}, index).forEach((l) => e.say(l))
+    return diffTrees(branchCommits(e.fs, root).at(-1)?.tree ?? {}, index).forEach((l) => e.say(l))
   }
   const work = workTree(e.fs, root)
   const now: Tree = {}
@@ -546,24 +595,223 @@ function gitDiff(e: Env, root: string) {
   diffTrees(index, now).forEach((l) => e.say(l))
 }
 
+
+function checkoutTree(e: Env, root: string, tree: Tree) {
+  const next = { ...e.fs }
+  for (const p of Object.keys(next)) {
+    if (p.startsWith(`${base(root)}/`) && !p.startsWith(`${base(root)}/.git/`) && typeof next[p] === 'string') delete next[p]
+  }
+  for (const [p, content] of Object.entries(tree)) next[`${base(root)}/${p}`] = content
+  next[gitFile(root, 'index')] = JSON.stringify(tree)
+  e.fs = next
+}
+
+function gitBranch(e: Env, root: string) {
+  const args = e.rest.slice(1)
+  const refs = readBranches(e.fs, root)
+  const current = currentBranch(e.fs, root)
+  if (!args.length) {
+    Object.keys(refs).sort().forEach((name) => e.say(`${name === current ? '* ' : '  '}${name}`))
+    return
+  }
+  if (args[0] === '-d' || args[0] === '-D') {
+    const name = args[1]
+    if (!name) return e.err("error: branch name required")
+    if (name === current) return e.err(`error: Cannot delete branch '${name}' checked out`)
+    if (!(name in refs)) return e.err(`error: branch '${name}' not found`)
+    const next = { ...refs }; delete next[name]
+    e.fs = { ...e.fs, [gitFile(root, 'branches')]: JSON.stringify(next) }
+    return e.say(`Deleted branch ${name}.`)
+  }
+  const name = args[0]
+  if (name.startsWith('-')) return e.err(`error: unknown option '${name}'`)
+  if (name in refs) return e.err(`fatal: a branch named '${name}' already exists`)
+  refs[name] = refs[current] ?? null
+  e.fs = { ...e.fs, [gitFile(root, 'branches')]: JSON.stringify(refs) }
+  e.say(`ブランチ '${name}' を作成しました。`)
+}
+
+function gitSwitch(e: Env, root: string) {
+  const name = e.rest[1]
+  if (!name) return e.err('fatal: missing branch name')
+  const refs = readBranches(e.fs, root)
+  if (!(name in refs)) return e.err(`fatal: invalid reference: ${name}`)
+  const status = compare(branchCommits(e.fs, root).at(-1)?.tree ?? {}, readIndex(e.fs, root), workTree(e.fs, root))
+  if (status.staged.length || status.unstaged.length || status.untracked.length) return e.err('error: Your local changes would be overwritten by checkout.')
+  const commit = headCommit(e.fs, root, name)
+  const next = { ...e.fs, [gitFile(root, 'HEAD')]: `ref: refs/heads/${name}\n` }
+  e.fs = next
+  checkoutTree(e, root, commit?.tree ?? {})
+  e.say(`Switched to branch '${name}'`)
+}
+
+function gitMerge(e: Env, root: string) {
+  const name = e.rest[1]
+  if (!name) return e.err('git merge: missing branch name')
+  const refs = readBranches(e.fs, root)
+  const current = currentBranch(e.fs, root)
+  if (!(name in refs)) return e.err(`merge: ${name} - not something we can merge`)
+  if (name === current) return e.err('Already up to date.')
+  const ours = headCommit(e.fs, root, current)
+  const theirs = headCommit(e.fs, root, name)
+  if (!theirs) return e.err(`merge: ${name} has no commits`)
+  if (ours?.id === theirs.id) return e.say('Already up to date.')
+  const all = readCommits(e.fs, root)
+  const isAncestor = (ancestor: string | undefined, descendant: Commit | undefined) => {
+    if (!ancestor) return true
+    let c = descendant
+    const seen = new Set<string>()
+    while (c && !seen.has(c.id)) {
+      if (c.id === ancestor) return true
+      seen.add(c.id)
+      c = all.find((x) => x.id === c?.parents?.[0]) ?? undefined
+    }
+    return false
+  }
+  if (isAncestor(ours?.id, theirs)) {
+    refs[current] = theirs.id
+    e.fs = { ...e.fs, [gitFile(root, 'branches')]: JSON.stringify(refs) }
+    checkoutTree(e, root, theirs.tree)
+    return e.say(`Updating ${ours?.id.slice(0, 7) ?? '0000000'}..${theirs.id.slice(0, 7)}\nFast-forward`)
+  }
+  if (isAncestor(theirs.id, ours)) return e.say('Already up to date.')
+  const tree = { ...(ours?.tree ?? {}), ...theirs.tree }
+  const index = readIndex(e.fs, root)
+  if (Object.keys(index).length) return e.err('error: Your local changes would be overwritten by merge.')
+  const id = sha(JSON.stringify({ parents: [ours?.id, theirs.id], tree, msg: `Merge branch '${name}'` }))
+  const commit: Commit = { id, msg: `Merge branch '${name}'`, date: gitDate(), tree, parents: [ours?.id, theirs.id].filter(Boolean) as string[] }
+  refs[current] = id
+  e.fs = { ...e.fs, [gitFile(root, 'commits')]: JSON.stringify([...all, commit]), [gitFile(root, 'branches')]: JSON.stringify(refs) }
+  checkoutTree(e, root, tree)
+  e.say(`Merge made by the 'ort' strategy.\n ${Object.keys(tree).length} files updated.`)
+}
+
+function gitRemote(e: Env, root: string) {
+  const args = e.rest.slice(1)
+  const remotes = readJson<Record<string, string>>(e.fs, gitFile(root, 'remotes'), {})
+  if (args[0] === '-v') {
+    Object.entries(remotes).forEach(([name, url]) => {
+      e.say(`${name}\t${url} (fetch)`)
+      e.say(`${name}\t${url} (push)`)
+    })
+    return
+  }
+  if (args[0] === 'add') {
+    const [name, url] = args.slice(1)
+    if (!name || !url) return e.err('usage: git remote add <name> <url>')
+    if (remotes[name]) return e.err(`error: remote ${name} already exists.`)
+    remotes[name] = url
+    e.fs = { ...e.fs, [gitFile(root, 'remotes')]: JSON.stringify(remotes) }
+    return
+  }
+  if (!args.length) return Object.keys(remotes).forEach((name) => e.say(name))
+  e.err(`error: unknown subcommand: ${args[0]}`)
+}
+
+function gitPush(e: Env, root: string) {
+  const remotes = readJson<Record<string, string>>(e.fs, gitFile(root, 'remotes'), {})
+  const remote = e.rest.slice(1).find((x) => !x.startsWith('-'))
+  const url = remote ? remotes[remote] : undefined
+  if (!remote || !url) return e.err(`fatal: '${remote ?? ''}' does not appear to be a git repository`)
+  const branch = e.rest.slice(1).filter((x) => !x.startsWith('-'))[1] ?? currentBranch(e.fs, root)
+  const refs = readBranches(e.fs, root)
+  const commits = readCommits(e.fs, root)
+  const snapshot: RemoteSnapshot = { defaultBranch: branch, branches: refs, commits, files: headCommit(e.fs, root, branch)?.tree ?? workTree(e.fs, root) }
+  const store = remoteStorePath(remoteNameFromUrl(url))
+  const dirs = { ...e.fs, [`${HOME}/.sim-remotes`]: null, [store]: JSON.stringify(snapshot) }
+  if (e.rest.includes('-u')) {
+    const tracking = readJson<Record<string, string>>(dirs, gitFile(root, 'tracking'), {})
+    dirs[gitFile(root, 'tracking')] = JSON.stringify({ ...tracking, [branch]: `${remote}/${branch}` })
+  }
+  e.fs = dirs
+  if (e.rest.includes('-u')) e.say(`branch '${branch}' set up to track '${remote}/${branch}'.`)
+  e.say(`Enumerating objects: ${commits.length}, done.`)
+  e.say(`To ${url}\n   ${headCommit(e.fs, root, branch)?.id.slice(0, 7) ?? '0000000'}  ${branch} -> ${branch}`)
+}
+
+function gitPull(e: Env, root: string) {
+  const remotes = readJson<Record<string, string>>(e.fs, gitFile(root, 'remotes'), {})
+  const remote = e.rest.slice(1).find((x) => !x.startsWith('-')) ?? 'origin'
+  const url = remotes[remote]
+  if (!url) return e.err(`fatal: '${remote}' does not appear to be a git repository`)
+  const store = remoteStorePath(remoteNameFromUrl(url))
+  const snapshot = readJson<RemoteSnapshot | null>(e.fs, store, null)
+  if (!snapshot) return e.err(`fatal: unable to access '${url}': simulated remote repository not found`)
+  const branch = e.rest.slice(1).filter((x) => !x.startsWith('-'))[1] ?? currentBranch(e.fs, root)
+  let update = snapshot.pullUpdate?.branch === branch ? snapshot.pullUpdate.commit : null
+  const currentRemoteHead = snapshot.branches[branch] ?? snapshot.branches[snapshot.defaultBranch]
+  if (update && currentRemoteHead && update.parents?.[0] !== currentRemoteHead) {
+    const baseCommit = snapshot.commits.find((c) => c.id === currentRemoteHead)
+    const mergedTree = { ...(baseCommit?.tree ?? snapshot.files ?? {}) }
+    if (snapshot.pullUpdate?.baseTree) {
+      // seed に入れた「他の人の変更差分」だけを、push 済みの最新ツリーへ適用する。
+      for (const [path, content] of Object.entries(update.tree)) {
+        if (snapshot.pullUpdate.baseTree[path] !== content) mergedTree[path] = content
+      }
+      for (const path of Object.keys(snapshot.pullUpdate.baseTree)) {
+        if (!(path in update.tree)) delete mergedTree[path]
+      }
+    } else {
+      Object.assign(mergedTree, update.tree)
+    }
+    update = { ...update, id: sha(JSON.stringify({ parent: currentRemoteHead, msg: update.msg, tree: mergedTree })), parents: [currentRemoteHead], tree: mergedTree }
+  }
+  const remoteHead = update?.id ?? currentRemoteHead
+  if (!remoteHead) return e.err(`fatal: couldn't find remote ref ${branch}`)
+  const localAll = readCommits(e.fs, root)
+  const combined = [...localAll]
+  for (const c of snapshot.commits) if (!combined.some((x) => x.id === c.id)) combined.push(c)
+  if (update && !combined.some((x) => x.id === update.id)) combined.push(update)
+  const refs = { ...readBranches(e.fs, root), [branch]: remoteHead }
+  e.fs = { ...e.fs, [gitFile(root, 'commits')]: JSON.stringify(combined), [gitFile(root, 'branches')]: JSON.stringify(refs) }
+  const commit = combined.find((c) => c.id === remoteHead)
+  if (branch === currentBranch(e.fs, root) && commit) checkoutTree(e, root, commit.tree)
+  e.say(`From ${url}\n * branch            ${branch} -> FETCH_HEAD\nUpdating local branch '${branch}'.`)
+  e.say(update ? `Fast-forward ${update.parents?.[0]?.slice(0, 7) ?? ''}..${update.id.slice(0, 7)}` : 'Already up to date.')
+}
+
+function gitClone(e: Env) {
+  const url = e.rest[1]
+  if (!url) return e.err('usage: git clone <repository> [<directory>]')
+  const name = e.rest[2] ?? remoteNameFromUrl(url)
+  const dest = e.R(name)
+  if (exists(e.fs, dest)) return e.err(`fatal: destination path '${name}' already exists and is not an empty directory.`)
+  const store = remoteStorePath(remoteNameFromUrl(url))
+  const snapshot = readJson<RemoteSnapshot | null>(e.fs, store, null)
+  if (!snapshot) return e.err(`fatal: repository '${url}' not found in the simulated remote area`)
+  const branch = snapshot.defaultBranch || 'main'
+  const commit = snapshot.commits.find((c) => c.id === snapshot.branches[branch]) ?? snapshot.commits.at(-1)
+  const files = commit?.tree ?? snapshot.files ?? {}
+  const next = { ...e.fs, [dest]: null, [`${dest}/.git`]: null,
+    [`${dest}/.git/HEAD`]: `ref: refs/heads/${branch}\n`,
+    [`${dest}/.git/index`]: JSON.stringify(files),
+    [`${dest}/.git/commits`]: JSON.stringify(snapshot.commits),
+    [`${dest}/.git/branches`]: JSON.stringify(snapshot.branches),
+    [`${dest}/.git/remotes`]: JSON.stringify({ origin: url }), [`${dest}/.git/tracking`]: JSON.stringify({ [branch]: `origin/${branch}` }) }
+  for (const [path, content] of Object.entries(files)) next[`${dest}/${path}`] = content
+  e.fs = next
+  e.say(`Cloning into '${name}'...`)
+  e.say('Receiving objects: 100% (simulated), done.')
+}
+
 function gitCommand(e: Env) {
   const sub = e.rest[0]
   if (!sub) {
     e.say('usage: git <command> [<args>]')
     e.say(BLANK)
-    e.say('この練習用ターミナルで使えるコマンド：init status add commit log diff')
+    e.say('この練習用ターミナルで使えるコマンド：init status add commit log diff branch switch merge remote push pull clone')
     return
   }
   if (sub === '--version' || sub === 'version') return e.say('git version 2.43.0')
-  if (sub === 'config') return // 練習用なので、設定は不要（何も表示しない）
-  if (GIT_LATER.includes(sub)) return e.err(`git: '${sub}' is not supported in this practice terminal yet`)
-  if (!GIT_SUBS.includes(sub)) {
+  if (sub === 'config') return
+  if (!GIT_SUBS.includes(sub) && !GIT_LATER.includes(sub)) {
     e.err(`git: '${sub}' is not a git command. See 'git --help'.`)
     const near = GIT_SUBS.map((n) => [n, distance(sub, n)] as const).filter(([, d]) => d <= 2).sort((x, y) => x[1] - y[1])[0]
     if (near) e.say(`\nThe most similar command is\n\t${near[0]}`)
     return
   }
   if (sub === 'init') return gitInit(e)
+  if (sub === 'clone') return gitClone(e)
   const root = gitRoot(e.fs, e.cwd)
   if (!root) return e.err('fatal: not a git repository (or any of the parent directories): .git')
   if (sub === 'status') return statusLines(e.fs, root, e.cwd).forEach((l) => e.say(l))
@@ -571,6 +819,12 @@ function gitCommand(e: Env) {
   if (sub === 'commit') return gitCommit(e, root)
   if (sub === 'log') return gitLog(e, root)
   if (sub === 'diff') return gitDiff(e, root)
+  if (sub === 'branch') return gitBranch(e, root)
+  if (sub === 'switch' || sub === 'checkout') return gitSwitch(e, root)
+  if (sub === 'merge') return gitMerge(e, root)
+  if (sub === 'remote') return gitRemote(e, root)
+  if (sub === 'push') return gitPush(e, root)
+  if (sub === 'pull') return gitPull(e, root)
 }
 
 /* ---------- 入力の解析と実行 ---------- */

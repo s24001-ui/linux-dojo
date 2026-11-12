@@ -11,6 +11,54 @@ type T = { s: TermState; lines: Line[]; log: string[]; diff: Diff | null }
 export function useTerminal(initialFs: Fs, initialCwd: string = HOME, preload: Line[] = []) {
   const init = (): T => ({ s: { fs: initialFs, cwd: initialCwd }, lines: preload, log: [], diff: null })
   const [t, setT] = useState(init)
+  const remoteHydrated = useRef(false)
+  const initialFsRef = useRef(initialFs)
+
+  // 疑似リモートだけはレッスンを移動しても共有できるよう、ブラウザ内に保存する。
+  // ファイルや作業ディレクトリなど、通常のターミナル状態は保存しない。
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('linux-dojo:simulated-remotes:v1') ?? '{}') as Record<string, string>
+      setT((prev) => {
+        const fs = { ...prev.s.fs }
+        for (const [path, value] of Object.entries(saved)) {
+          if (!path.startsWith(`${HOME}/.sim-remotes/`)) continue
+          let merged = value
+          const seedValue = fs[path]
+          // レッスン14の「他の人が追加した更新」を、レッスン13でpushした内容にも適用できるよう引き継ぐ。
+          if (typeof seedValue === 'string') {
+            try {
+              const savedSnapshot = JSON.parse(value) as Record<string, unknown>
+              const seedSnapshot = JSON.parse(seedValue) as Record<string, unknown>
+              if (!savedSnapshot.pullUpdate && seedSnapshot.pullUpdate) {
+                merged = JSON.stringify({ ...savedSnapshot, pullUpdate: seedSnapshot.pullUpdate })
+              }
+            } catch { /* 壊れた保存データはそのまま扱い、コマンド側でエラーにする */ }
+          }
+          fs[path] = merged
+        }
+        return { ...prev, s: { ...prev.s, fs } }
+      })
+    } catch { /* localStorage が使えない環境でも通常の疑似ターミナルは動作する */ }
+    remoteHydrated.current = true
+  }, [])
+
+  useEffect(() => {
+    if (!remoteHydrated.current) return
+    try {
+      const saved = JSON.parse(localStorage.getItem('linux-dojo:simulated-remotes:v1') ?? '{}') as Record<string, string>
+      const current: Record<string, string> = {}
+      for (const [path, value] of Object.entries(t.s.fs)) {
+        if (!path.startsWith(`${HOME}/.sim-remotes/`) || typeof value !== 'string') continue
+        // 初期状態へのリセットでは、別レッスンでpush済みのリモートを初期スナップショットで上書きしない。
+        if (typeof initialFsRef.current[path] === 'string' && value === initialFsRef.current[path] && saved[path]) continue
+        current[path] = value
+      }
+      if (Object.keys(current).length) {
+        localStorage.setItem('linux-dojo:simulated-remotes:v1', JSON.stringify({ ...saved, ...current }))
+      }
+    } catch { /* localStorage が使えない環境でも通常の疑似ターミナルは動作する */ }
+  }, [t.s.fs])
 
   const run = (cmd: string) => {
     if (!cmd.trim()) return // 空の入力は何もしない

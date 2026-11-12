@@ -476,3 +476,74 @@ begin
     values ((select id from lessons where code=$s$git-log$s$), 'quiz', $s$git diff$s$, $s$git add したあとに git diff（オプションなし）を実行しても何も表示されないのは、なぜ？$s$, $j$["変更が消えてしまったから","コミットが完了したから","変更がステージに入り、ステージとの差がなくなったから","git diff が壊れているから"]$j$::jsonb, 2, $s$git diff は、ステージ前の変更だけを表示します。ステージに入った変更は git diff --staged で見られます。$s$);
 end
 $seed4$;
+
+
+-- ========== Git応用レッスン（12〜14） ==========
+-- 疑似ターミナル内だけでGitのブランチ・リモート操作を再現する。外部通信は行わない。
+insert into lessons (code, title, sort_order, category) values
+  ($s$git-branch$s$, $s$枝分かれしてみよう$s$, 150, $s$Git$s$),
+  ($s$git-push$s$, $s$共有してみよう（送る）$s$, 160, $s$Git$s$),
+  ($s$git-pull$s$, $s$共有してみよう（受け取る）$s$, 170, $s$Git$s$)
+on conflict (code) do update
+set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-branch$s$), 1, $s$git branch feature で、新しい feature ブランチを作りましょう。$s$, $s$git branch のあとに、作りたいブランチ名を指定します。$s$, $j${"commands":["^git\\s+branch\\s+feature$"]}$j$::jsonb, $j${"cwd":"~/project","dirs":["project"],"files":{"project/README.md":"Linuxコマンド道場のGit練習用リポジトリです。\n","project/.git/HEAD":"ref: refs/heads/main\n","project/.git/index":"{\"README.md\":\"Linuxコマンド道場のGit練習用リポジトリです。\\n\"}","project/.git/commits":"[{\"id\":\"1111111111111111111111111111111111111111\",\"msg\":\"Initial commit\",\"date\":\"Mon Nov 10 10:00:00 2026 +0900\",\"tree\":{\"README.md\":\"Linuxコマンド道場のGit練習用リポジトリです。\\n\"},\"parents\":[]}]","project/.git/branches":"{\"main\":\"1111111111111111111111111111111111111111\"}"}}$j$::jsonb)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-branch$s$), 2, $s$git switch feature で、feature ブランチに移動しましょう。$s$, $s$switch のあとに移動先のブランチ名を指定します。$s$, $j${"commands":["^git\\s+switch\\s+feature$"]}$j$::jsonb, null)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-branch$s$), 3, $s$echo "feature branch" > feature.txt で、feature.txt を作りましょう。$s$, $s$echo の文字列を > のあとに指定したファイルへ書き込みます。$s$, $j${"commands":["^echo\\s+[\"\\']?feature branch[\"\\']?\\s*>\\s*feature\\.txt$"],"files":["feature.txt"]}$j$::jsonb, null)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-branch$s$), 4, $s$git add feature.txt で、変更をステージに追加しましょう。$s$, $s$コミットする前に git add でファイルをステージに追加します。$s$, $j${"commands":["^git\\s+add\\s+feature\\.txt$"]}$j$::jsonb, null)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-branch$s$), 5, $s$git commit -m "add feature" で、feature ブランチに記録しましょう。$s$, $s$-m のあとにコミットメッセージを書きます。$s$, $j${"commands":["^git\\s+commit\\s+-m\\s+[\"\\']add feature[\"\\']$"]}$j$::jsonb, null)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-branch$s$), 6, $s$git switch main で main に戻り、git merge feature で feature の変更を統合しましょう。$s$, $s$まず git switch main、そのあと git merge feature の順に実行します。$s$, $j${"commands":["^git\\s+switch\\s+main$","^git\\s+merge\\s+feature$"],"files":["feature.txt"]}$j$::jsonb, null)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-push$s$), 1, $s$git remote add origin https://github.com/s24001-ui/linux-dojo.git で、疑似リモートの接続先を登録しましょう。$s$, $s$この練習では実際のGitHub通信は行いません。URLをローカルの疑似リモート名として登録します。$s$, $j${"commands":["^git\\s+remote\\s+add\\s+origin\\s+https://github\\.com/s24001-ui/linux-dojo\\.git$"]}$j$::jsonb, $j${"cwd":"~/project","dirs":["project"],"files":{"project/README.md":"Linuxコマンド道場のGit練習用リポジトリです。\n","project/.git/HEAD":"ref: refs/heads/main\n","project/.git/index":"{\"README.md\":\"Linuxコマンド道場のGit練習用リポジトリです。\\n\"}","project/.git/commits":"[{\"id\":\"1111111111111111111111111111111111111111\",\"msg\":\"Initial commit\",\"date\":\"Mon Nov 10 10:00:00 2026 +0900\",\"tree\":{\"README.md\":\"Linuxコマンド道場のGit練習用リポジトリです。\\n\"},\"parents\":[]}]","project/.git/branches":"{\"main\":\"1111111111111111111111111111111111111111\"}"}}$j$::jsonb)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-push$s$), 2, $s$git remote -v で、登録した接続先を確認しましょう。$s$, $s$remote のあとに -v を付けると、fetch と push の接続先が表示されます。$s$, $j${"commands":["^git\\s+remote\\s+-v$"]}$j$::jsonb, null)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-push$s$), 3, $s$git push -u origin main で、main ブランチを疑似リモートへ送信しましょう。$s$, $s$-u は、次回以降の push / pull で使う追跡先を設定します。実際の通信ではなく、ブラウザ内の疑似リモートへ保存します。$s$, $j${"commands":["^git\\s+push\\s+-u\\s+origin\\s+main$"]}$j$::jsonb, null)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-push$s$), 4, $s$git status で、リモートとの同期状態を確認しましょう。$s$, $s$push が成功していれば、origin/main と同期済みであることが表示されます。$s$, $j${"commands":["^git\\s+status$"]}$j$::jsonb, null)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-pull$s$), 1, $s$git clone https://github.com/s24001-ui/linux-dojo.git で、疑似リモートのリポジトリをコピーしましょう。$s$, $s$このレッスンでは、あらかじめ用意した疑似リモートからコピーします。外部への通信は行いません。$s$, $j${"commands":["^git\\s+clone\\s+https://github\\.com/s24001-ui/linux-dojo\\.git$"],"dirs":["linux-dojo"],"files":["linux-dojo/README.md"]}$j$::jsonb, $j${"cwd":"~","dirs":[".sim-remotes"],"files":{".sim-remotes/linux-dojo.json":"{\"defaultBranch\":\"main\",\"branches\":{\"main\":\"2222222222222222222222222222222222222222\"},\"commits\":[{\"id\":\"2222222222222222222222222222222222222222\",\"msg\":\"Initial commit\",\"date\":\"Mon Nov 10 10:00:00 2026 +0900\",\"tree\":{\"README.md\":\"Linuxコマンド道場の共有リポジトリです。\\n\"},\"parents\":[]}],\"files\":{\"README.md\":\"Linuxコマンド道場の共有リポジトリです。\\n\"},\"pullUpdate\":{\"branch\":\"main\",\"commit\":{\"id\":\"3333333333333333333333333333333333333333\",\"msg\":\"Add changelog from teammate\",\"date\":\"Tue Nov 11 11:00:00 2026 +0900\",\"tree\":{\"README.md\":\"Linuxコマンド道場の共有リポジトリです。\\n\",\"CHANGELOG.md\":\"他の人が追加した更新です。\\n\"},\"parents\":[\"2222222222222222222222222222222222222222\"]},\"baseTree\":{\"README.md\":\"Linuxコマンド道場の共有リポジトリです。\\n\"}}}"}}$j$::jsonb)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-pull$s$), 2, $s$cd linux-dojo で、コピーしたリポジトリへ移動しましょう。$s$, $s$clone で作成された linux-dojo フォルダへ cd します。$s$, $j${"cwd":"~/linux-dojo","commands":["^cd\\s+linux-dojo$"]}$j$::jsonb, null)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-pull$s$), 3, $s$git log --oneline で、コピー直後のコミット履歴を確認しましょう。$s$, $s$--oneline を付けると、コミットを1行ずつ短く表示できます。$s$, $j${"commands":["^git\\s+log\\s+--oneline$"]}$j$::jsonb, null)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-pull$s$), 4, $s$git pull で、他の人が追加した更新を受け取りましょう。$s$, $s$疑似リモートには、clone 後に追加された CHANGELOG.md の更新を用意しています。$s$, $j${"commands":["^git\\s+pull$"],"files":["linux-dojo/CHANGELOG.md"]}$j$::jsonb, null)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+values ((select id from lessons where code=$s$git-pull$s$), 5, $s$git log --oneline と git status で、更新後の履歴と状態を確認しましょう。$s$, $s$新しいコミットが増え、作業ツリーが clean になっていれば成功です。$s$, $j${"commands":["^git\\s+log\\s+--oneline$","^git\\s+status$"],"files":["linux-dojo/CHANGELOG.md"]}$j$::jsonb, null)
+on conflict (lesson_id, step_number) do update
+set body=excluded.body, hint=excluded.hint, clear_condition=excluded.clear_condition, setup_data=excluded.setup_data;
