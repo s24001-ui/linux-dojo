@@ -603,3 +603,55 @@ where not exists (select 1 from questions where question_type = 'scenario' and t
 insert into questions (question_type, command_tag, title, body, setup_data)
 select 'scenario', $s$find$s$, $s$テキストファイルを集めよう$s$, $s$あちこちにある .txt ファイルを、1か所にまとめます。まず find で探し、texts フォルダを作って、見つけたファイルをすべて移しましょう。$s$, $j${"summary": "find で探したファイルを、1つのフォルダに集める", "commands": "find / mkdir / mv", "fs": {"files": {"memo.txt": "メモ", "documents/report.txt": "レポート", "documents/notes.txt": "買い物メモ", "photos/a.jpg": ""}}, "goals": [{"label": "find で、.txt のファイルを探して表示する", "hints": ["名前でファイルを探すコマンドは？", "「find 場所 -name パターン」の形です。「.」はいまのフォルダ、「*」はどんな文字にもあてはまります。", "find . -name \"*.txt\""], "commands": ["^find\\s+\\.\\s+-name\\s+[\"']?\\*\\.txt[\"']?$"]}, {"label": "texts フォルダを作る", "hints": ["フォルダを作るコマンドは？", "mkdir のあとに、フォルダ名を書きます。", "mkdir texts"], "dirs": ["texts"]}, {"label": "見つけた3つの .txt を、すべて texts に移動する", "hints": ["移動は mv を使います。ファイルごとに1回ずつ実行します。", "documents の中のファイルは「documents/ファイル名」と書きます。", "mv memo.txt texts / mv documents/report.txt texts / mv documents/notes.txt texts"], "files": ["texts/memo.txt", "texts/report.txt", "texts/notes.txt"], "absent": ["memo.txt", "documents/report.txt", "documents/notes.txt"]}], "checks": [{"files": ["texts/memo.txt", "texts/report.txt", "texts/notes.txt", "photos/a.jpg"], "absent": ["memo.txt", "documents/report.txt", "documents/notes.txt"]}]}$j$::jsonb
 where not exists (select 1 from questions where question_type = 'scenario' and title = $s$テキストファイルを集めよう$s$);
+
+-- Linuxコマンド道場 追加の確認テスト（Git：枝分かれ・送る・受け取る 各5問＝15問）
+-- seed.sql の末尾に貼り付けるか、SQL Editor でそのまま実行する。
+-- 対象のレッスン（git-branch・git-push・git-pull）に確認テストがまだ無いときだけ入る。何度実行しても重複しない（回答履歴も消えない）。
+
+do $seed5$
+declare lid int;
+begin
+
+  select id into lid from lessons where code = $s$git-branch$s$;
+  if lid is not null and not exists (select 1 from questions where question_type = 'quiz' and lesson_id = lid) then
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git branch$s$, $s$ブランチ（枝分かれ）を作る理由として、最も正しいのはどれ？$s$, $j$["ファイルの容量を減らすため","コミットの履歴を消すため","本流（main）に影響を与えずに、別の作業を安全に進めるため","他の人にファイルを送るため"]$j$::jsonb, 2, $s$ブランチを作ると、main をそのままにして、新しい機能の試作などを別の枝で進められます。うまくいったら、あとで merge で取り込みます。$s$);
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git switch$s$, $s$git branch と git switch の違いとして、正しいのはどれ？$s$, $j$["どちらもブランチを移動するコマンドで、違いはない","branch は移動し、switch は作成する","branch は削除し、switch は一覧を表示する","branch は一覧の表示やブランチの作成（移動はしない）、switch はブランチの移動"]$j$::jsonb, 3, $s$git branch は一覧・作成、git switch は移動です。作成と移動をまとめて行う git switch -c 名前 も便利です。$s$);
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git branch$s$, $s$feature という新しいブランチを作る（移動はしない）コマンドはどれ？$s$, $j$["git branch feature","git switch feature","git merge feature","git new feature"]$j$::jsonb, 0, $s$git branch のあとにブランチの名前を書くと、いまのコミットから新しいブランチができます。作っただけでは、いるブランチは変わりません。$s$);
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git merge$s$, $s$feature の変更を main に取り込みたいとき、どのブランチにいる状態で git merge feature を実行する？$s$, $j$["feature","main","どのブランチでもよい","新しく作ったブランチ"]$j$::jsonb, 1, $s$git merge は、「いまいるブランチに」指定したブランチを取り込みます。取り込み先の main に移ってから実行します。$s$);
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git branch$s$, $s$いま、どのブランチにいるかを確認する方法として、正しいのはどれ？$s$, $j$["pwd を実行する","ls -a を実行する","git branch を実行し、「*」がついているものを見る","git diff を実行する"]$j$::jsonb, 2, $s$git branch の一覧で、「*」がついているのがいまのブランチです。git status の1行目（On branch ...）でも分かります。$s$);
+  end if;
+
+  select id into lid from lessons where code = $s$git-push$s$;
+  if lid is not null and not exists (select 1 from questions where question_type = 'quiz' and lesson_id = lid) then
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git remote$s$, $s$git remote add origin <URL> の「origin」は、何を表している？$s$, $j$["最初のコミットの ID","リモートリポジトリにつける名前（慣習的に origin と呼ぶ）","最初に作ったブランチの名前","隠しフォルダの名前"]$j$::jsonb, 1, $s$リモートは、GitHub などにある「共有用のリポジトリ」です。origin は、そのリモートにつける名前で、慣習的によく使われます。$s$);
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git push$s$, $s$git push の役割として、正しいのはどれ？$s$, $j$["リモートの変更を、自分のリポジトリに取り込む","ブランチを削除する","ファイルの中身を表示する","自分のコミットを、リモートリポジトリに送る"]$j$::jsonb, 3, $s$push は「自分 → リモート」へ送る操作です。送られるのは、コミット済みの記録です。$s$);
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git push$s$, $s$git push -u origin main の「-u」は、何をするオプション？$s$, $j$["次回から git push だけで送れるように、送り先（上流）を覚えさせる","強制的に上書きして送る","ユーザー名を指定する","更新したファイルだけを送る"]$j$::jsonb, 0, $s$-u（--set-upstream）をつけると、このブランチの送り先が origin の main だと記録されます。2回目からは git push だけで済みます。$s$);
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git remote$s$, $s$push 先（リモート）について、正しいのはどれ？$s$, $j$["GitHub しか使えない","自分のパソコンの別のフォルダには送れない","GitLab や、会社・学校のサーバー、自分のサーバーなども使える","1つのリポジトリに、リモートは1つしか登録できない"]$j$::jsonb, 2, $s$リモートは GitHub に限りません。git remote add のあとに名前と場所（URL）を書けば、どこでも登録できます。複数登録もできます。$s$);
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git push$s$, $s$変更をリモートに送るまでの、正しい順番はどれ？$s$, $j$["git push → git commit → git add","git add → git commit → git push","git commit → git add → git push","git add → git push → git commit"]$j$::jsonb, 1, $s$変更を add でステージし、commit で記録してから、push で送ります。commit していない変更は、push しても送られません。$s$);
+  end if;
+
+  select id into lid from lessons where code = $s$git-pull$s$;
+  if lid is not null and not exists (select 1 from questions where question_type = 'quiz' and lesson_id = lid) then
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git clone$s$, $s$git clone の役割として、正しいのはどれ？$s$, $j$["ブランチを統合する","変更を記録する","自分のコミットをリモートに送る","リモートのリポジトリを、履歴ごと自分のパソコンにコピーする"]$j$::jsonb, 3, $s$clone は、リモートのリポジトリを最初に手元へコピーする操作です。コピーしたフォルダには、すべての履歴が入っています。$s$);
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git pull$s$, $s$git pull の役割として、正しいのはどれ？$s$, $j$["リモートにある新しいコミットを、自分のリポジトリに取り込む","自分のコミットをリモートに送る","ブランチを削除する","コミットの履歴を表示する"]$j$::jsonb, 0, $s$pull は「リモート → 自分」へ最新の変更を取り込む操作です。他の人が push した変更を受け取るときに使います。$s$);
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git pull$s$, $s$git pull と git push の違いとして、正しいのはどれ？$s$, $j$["pull は送り、push は受け取る","pull はリモートから受け取り、push はリモートへ送る","どちらも送る操作で、違いはない","pull はファイル用、push はフォルダ用"]$j$::jsonb, 1, $s$push は「自分 → リモート」、pull は「リモート → 自分」です。向きが反対です。$s$);
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git push$s$, $s$git push が rejected（拒否）されました。よくある原因はどれ？$s$, $j$["コミットメッセージが長すぎるから","ファイル名に日本語が入っているから","リモートに、自分がまだ持っていない新しいコミットがあるから","ブランチ名が main だから"]$j$::jsonb, 2, $s$他の人が先に push していると、そのまま送れません。先に git pull で取り込み、そのうえでもう一度 push します。$s$);
+    insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+      values (lid, 'quiz', $s$git pull$s$, $s$すでに clone したリポジトリで、他の人の新しい変更を受け取りたいとき、使うのはどれ？$s$, $j$["git pull","もう一度 git clone する","git init","git push"]$j$::jsonb, 0, $s$clone は、最初に1回だけ手元へコピーするときに使います。そのあとの更新の受け取りは pull です。$s$);
+  end if;
+end
+$seed5$;
