@@ -31,9 +31,10 @@ async function Top() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <p className="text-lg font-bold">今日もコマンドを練習しましょう</p>
-      </header>
+      <div>
+        <h1 className="text-2xl font-bold">レッスン一覧</h1>
+        <p className="mt-1 text-sm text-gray-600">コマンドを学習して、確認テストに挑戦しましょう</p>
+      </div>
 
       {nextLesson && (
         <section aria-label="次に学ぶレッスン">
@@ -110,7 +111,6 @@ async function Top() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-xl font-bold">レッスン一覧</h2>
         {groups.map((g) => (
           <div key={g.category} className="mb-5">
             <h3 className="mb-2 text-lg font-bold text-[#3d5a80]">{g.category}</h3>

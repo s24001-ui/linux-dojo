@@ -7,7 +7,11 @@ import type { RepairRow } from '@/lib/types'
 export default function RepairListView({ missions }: { missions: RepairRow[] }) {
   const [query, setQuery] = useState('')
   const clearedCount = missions.filter((mission) => mission.cleared).length
-  const commands = [...new Set(missions.map((mission) => mission.command_tag))].sort()
+  const commands = [...new Set(missions.map((mission) => mission.command_tag))]
+  const orderedCommands = [
+    ...commands.filter((command) => !command.toLowerCase().startsWith('git ')),
+    ...commands.filter((command) => command.toLowerCase().startsWith('git ')),
+  ]
   const filteredMissions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
     if (!normalizedQuery) return missions
@@ -46,7 +50,7 @@ export default function RepairListView({ missions }: { missions: RepairRow[] }) 
       </label>
       <div aria-label="対象コマンド一覧">
         <div className="mt-2 flex flex-wrap gap-2">
-          {commands.map((command) => (
+          {orderedCommands.map((command) => (
             <button
               key={command}
               type="button"
@@ -68,7 +72,10 @@ export default function RepairListView({ missions }: { missions: RepairRow[] }) 
               <Link href={`/repair/${m.id}`} className="card block hover:bg-[#f3f6fa]">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-bold">{m.title}</span>
-                  <span className={`badge shrink-0 ${m.cleared ? 'badge-ok' : 'badge-ng'}`}>{m.cleared ? 'クリア済み' : '未クリア'}</span>
+                  <span className={`badge shrink-0 ${m.cleared ? 'badge-ok' : 'badge-ng'}`}>
+                    <span aria-hidden="true">{m.cleared ? '✓' : '□'}</span>{' '}
+                    {m.cleared ? 'クリア済み' : '未クリア'}
+                  </span>
                 </div>
                 <p className="mt-2 text-sm">{m.body}</p>
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
