@@ -30,7 +30,6 @@ async function ScenarioList() {
           </li>
         ))}
       </ul>
-      <Link href="/" className="inline-block text-[#3d5a80] underline">← トップページへ戻る</Link>
     </div>
   )
 }

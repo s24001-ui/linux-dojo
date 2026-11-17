@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { getRepairs } from '@/lib/db'
 
-// S-06 エラー修復ミッション一覧画面
+// S-06 エラー修復一覧画面
 export default function RepairListPage() {
   return (
     <Suspense fallback={<p>読み込み中…</p>}>
@@ -15,7 +15,7 @@ async function RepairList() {
   const missions = await getRepairs()
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">エラー修復ミッション</h1>
+      <h1 className="text-2xl font-bold">エラー修復</h1>
       <ul className="space-y-2">
         {missions.map((m) => (
           <li key={m.id}>
@@ -26,7 +26,6 @@ async function RepairList() {
           </li>
         ))}
       </ul>
-      <Link href="/" className="inline-block text-[#3d5a80] underline">← トップページへ戻る</Link>
     </div>
   )
 }

@@ -68,7 +68,7 @@ export default function LessonView({ lesson, steps }: { lesson: Pick<LessonRow, 
         </div>
       )}
 
-      <Link href="/" className="inline-block text-[#3d5a80] underline">← トップページへ戻る</Link>
+      <Link href="/" className="btn btn-sub">← トップへ戻る</Link>
     </div>
   )
 }

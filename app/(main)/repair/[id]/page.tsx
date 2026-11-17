@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import RepairView from '@/components/RepairView'
 import { getRepair } from '@/lib/db'
 
-// S-07 エラー修復ミッション画面
+// S-07 エラー修復画面
 export default function RepairPage({ params }: PageProps<'/repair/[id]'>) {
   return (
     <Suspense fallback={<p>読み込み中…</p>}>

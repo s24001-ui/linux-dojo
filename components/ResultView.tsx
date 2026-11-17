@@ -32,7 +32,7 @@ export default function ResultView({ lesson, nextLesson, items }: { lesson: Pick
         <Link href={`/tests/${lesson.code}`} className="btn">実技テストへ進む</Link>
         {nextLesson && <Link href={`/lessons/${nextLesson.code}`} className="btn">次のレッスンへ</Link>}
       </div>
-      <Link href="/" className="inline-block text-[#3d5a80] underline">← トップページへ戻る</Link>
+      <Link href="/" className="btn btn-sub">← トップへ戻る</Link>
     </div>
   )
 }

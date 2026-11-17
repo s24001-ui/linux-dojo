@@ -45,7 +45,7 @@ export default function PracticalView({ test }: { test: PracticalRow }) {
         </div>
       ))}
 
-      <Link href="/" className="inline-block text-[#3d5a80] underline">← トップページへ戻る</Link>
+      <Link href="/" className="btn btn-sub">← トップへ戻る</Link>
     </div>
   )
 }
