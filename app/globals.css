@@ -25,6 +25,10 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+html {
+  overflow-y: scroll;
+}
+
 /* 共通の部品（ログイン画面と同じ配色） */
 .btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 0.5rem; background: #3d5a80; color: #fff; font-weight: 700; padding: 0.6rem 1.25rem; cursor: pointer; text-align: center; }
 .btn:hover { background: #32496a; }

@@ -17,16 +17,20 @@ export default function Header() {
 
   return (
     <header className="border-b border-[#444] bg-[#e8e8e8]">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-2">
-        <Link href="/" className="text-xl font-bold">
+      <div className="mx-auto flex h-[3.25rem] max-w-6xl flex-nowrap items-center justify-between gap-x-6 overflow-x-auto px-4 py-2">
+        <Link
+          href="/"
+          className="shrink-0 rounded text-xl font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3d5a80]"
+        >
           Linuxコマンド道場
         </Link>
-        <nav className="flex flex-wrap gap-1 text-sm">
+        <nav aria-label="メインナビゲーション" className="flex shrink-0 flex-nowrap gap-1 text-sm">
           {NAV.map((n) => (
             <Link
               key={n.href}
               href={n.href}
-              className={`rounded px-3 py-1.5 ${active(n.href) ? 'bg-[#3d5a80] font-bold text-white' : 'hover:bg-[#d4d4d4]'}`}
+              aria-current={active(n.href) ? 'page' : undefined}
+              className={`whitespace-nowrap rounded px-3 py-1.5 font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3d5a80] ${active(n.href) ? 'bg-[#3d5a80] text-white' : 'hover:bg-[#d4d4d4]'}`}
             >
               {n.label}
             </Link>

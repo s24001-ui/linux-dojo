@@ -41,7 +41,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen flex-col bg-white text-[#222]">
       {/* ① ヘッダー：アプリケーションのタイトル */}
-      <header className="flex h-14 items-center justify-center border-b border-[#444] bg-[#e8e8e8]">
+      <header className="flex h-[3.25rem] items-center justify-center border-b border-[#444] bg-[#e8e8e8]">
         <h1 className="text-xl font-bold">Linuxコマンド道場</h1>
       </header>
 
