@@ -81,6 +81,10 @@ const EXPLAIN: [RegExp, string][] = [
   [/Aborting commit|requires a value/, 'コミットにはメッセージが必要です。git commit -m "メッセージ" のように書きます。'],
   [/is not a git command/, 'git のあとのコマンド名を確認しましょう（init / status / add / commit / log / diff）。'],
   [/does not have any commits yet/, 'まだコミットがありません。git add のあと git commit で、最初の記録を作りましょう。'],
+  [/invalid reference/, 'そのブランチは存在しません。git branch でブランチの一覧を見て、綴りを確認しましょう。'],
+  [/local changes would be overwritten/, '記録していない変更があるため、切り替えられません。先に git add と git commit で記録しましょう。'],
+  [/does not appear to be a git repository/, '送り先（リモート）が登録されていません。git remote add でリモートを登録しましょう。'],
+  [/destination path .* already exists/, '同じ名前のフォルダがすでにあります。別の名前を指定するか、いまあるフォルダを使いましょう。'],
   [/not supported in this practice terminal/, 'この練習用ターミナルでは、まだ使えないコマンドです。'],
 ]
 
@@ -923,6 +927,54 @@ function gitCommand(e: Env) {
   if (sub === 'remote') return gitRemote(e, root)
   if (sub === 'push') return gitPush(e, root)
   if (sub === 'pull') return gitPull(e, root)
+}
+
+/* ---------- 判定用：いまの Git の状態（クリア条件の git で使う。画面には出さない） ---------- */
+
+export type GitSnapshot = {
+  branch: string // いまのブランチ
+  branches: string[] // ブランチの一覧
+  commits: number // いまのブランチのコミット数
+  committed: string[] // いまのブランチの最新コミットに入っているファイル
+  staged: string[] // git add 済み（まだコミットしていない）ファイル
+  clean: boolean // 作業フォルダがきれい（変更・未追跡なし）
+  remotes: string[] // 登録されたリモート名
+  tracking: boolean // いまのブランチに送り先（上流）が設定されている
+  pushed: boolean // いまのブランチの最新コミットが、リモートに送られている
+  branchFiles: Record<string, string[]> // ブランチごとの最新コミットのファイル
+}
+
+// repo … リポジトリのフォルダ（絶対パス）。省略すると、cwd から上へたどって探す
+export function gitSnapshot(fs: Fs, cwd: string, repo?: string): GitSnapshot | null {
+  const root = repo ?? gitRoot(fs, cwd)
+  if (!root || !isDir(fs, `${base(root)}/.git`)) return null
+  const branch = currentBranch(fs, root)
+  const refs = readBranches(fs, root)
+  const commits = branchCommits(fs, root)
+  const head = commits.at(-1)
+  const st = compare(head?.tree ?? {}, readIndex(fs, root), workTree(fs, root))
+  const remotes = readJson<Record<string, string>>(fs, gitFile(root, 'remotes'), {})
+  const tracking = readJson<Record<string, string>>(fs, gitFile(root, 'tracking'), {})
+  let pushed = false
+  const url = remotes.origin ?? Object.values(remotes)[0]
+  if (url && head) {
+    const remote = readJson<RemoteSnapshot | null>(fs, remoteStorePath(remoteNameFromUrl(url)), null)
+    pushed = remote?.branches[branch] === head.id
+  }
+  const branchFiles: Record<string, string[]> = {}
+  for (const name of Object.keys(refs)) branchFiles[name] = Object.keys(headCommit(fs, root, name)?.tree ?? {})
+  return {
+    branch,
+    branches: Object.keys(refs),
+    commits: commits.length,
+    committed: Object.keys(head?.tree ?? {}),
+    staged: st.staged.map(([, p]) => p),
+    clean: !st.staged.length && !st.unstaged.length && !st.untracked.length,
+    remotes: Object.keys(remotes),
+    tracking: Boolean(tracking[branch]),
+    pushed,
+    branchFiles,
+  }
 }
 
 /* ---------- 入力の解析と実行 ---------- */
