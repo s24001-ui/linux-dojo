@@ -11,7 +11,7 @@ async function client() {
   return createClient()
 }
 
-type Q = { id: number; command_tag: string; title: string | null; body: string; setup_data: never; lessons?: { code: string } | null }
+type Q = { id: number; command_tag: string; title: string | null; body: string; setup_data: never; lessons?: { code?: string; sort_order?: number } | null }
 
 export async function getLessons(): Promise<LessonRow[]> {
   const sb = await client()
@@ -74,14 +74,17 @@ async function correctIds(ids: number[]) {
   return new Set((data ?? []).map((r) => r.question_id as number))
 }
 
-async function listByType(type: 'repair' | 'scenario') {
+async function listByType(type: 'repair' | 'scenario', orderByLesson = false) {
   const sb = await client()
-  const { data } = await sb.from('questions').select('id, command_tag, title, body, setup_data').eq('question_type', type).order('id')
+  const { data } = await sb.from('questions').select(`id, command_tag, title, body, setup_data${orderByLesson ? ', lessons(sort_order)' : ''}`).eq('question_type', type).order('id')
   const rows = (data ?? []) as unknown as Q[]
+  if (orderByLesson) {
+    rows.sort((a, b) => (a.lessons?.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.lessons?.sort_order ?? Number.MAX_SAFE_INTEGER) || a.id - b.id)
+  }
   const done = await correctIds(rows.map((r) => r.id))
   return rows.map((q) => ({ id: q.id, command_tag: q.command_tag, title: q.title ?? '', body: q.body, cleared: done.has(q.id), setup: q.setup_data }))
 }
-export const getRepairs = () => listByType('repair') as unknown as Promise<RepairRow[]>
+export const getRepairs = () => listByType('repair', true) as unknown as Promise<RepairRow[]>
 export const getScenarios = () => listByType('scenario') as unknown as Promise<ScenarioRow[]>
 
 export async function getRepair(id: number) {
