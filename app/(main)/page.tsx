@@ -60,10 +60,6 @@ async function Top() {
         ))}
       </section>
 
-      <section className="flex flex-wrap gap-3">
-        <Link href="/repair" className="btn">エラー修復ミッション</Link>
-        <Link href="/scenarios" className="btn">シナリオ</Link>
-      </section>
     </div>
   )
 }

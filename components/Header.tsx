@@ -7,8 +7,7 @@ import { usePathname } from 'next/navigation'
 const NAV = [
   { href: '/', label: 'トップ' },
   { href: '/repair', label: 'エラー修復' },
-  { href: '/review', label: '復習' },
-  { href: '/weakness', label: '弱点分析' },
+  { href: '/scenarios', label: 'シナリオ' },
   { href: '/mypage', label: 'マイページ' },
 ]
 
