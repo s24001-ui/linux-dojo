@@ -44,17 +44,26 @@ async function Top() {
           <div key={g.category} className="mb-5">
             <h3 className="mb-2 text-lg font-bold text-[#3d5a80]">{g.category}</h3>
             <ul className="space-y-2">
-              {g.items.map(({ l, no }) => (
-                <li key={l.id}>
-                  <Link href={`/lessons/${l.code}`} className="card flex items-center justify-between gap-3 hover:bg-[#f3f6fa]">
-                    <span className="font-bold">{no}. {l.title}</span>
-                    <span className="flex shrink-0 items-center gap-3 text-sm">
-                      <span className={`badge ${cleared.has(l.code) ? 'badge-ok' : 'badge-ng'}`}>{cleared.has(l.code) ? 'クリア済み' : '未クリア'}</span>
-                      <span className="w-14 text-right font-mono">{best[l.code] != null ? `${best[l.code]}/${QUIZ_SIZE}` : '－'}</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
+              {g.items.map(({ l, no }) => {
+                const isCleared = cleared.has(l.code)
+                return (
+                  <li key={l.id}>
+                    <Link
+                      href={`/lessons/${l.code}`}
+                      className="card flex min-h-16 items-center justify-between gap-3 transition-transform hover:bg-[#f3f6fa] active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3d5a80]"
+                    >
+                      <span className="font-bold">{no}. {l.title}</span>
+                      <span className="flex shrink-0 items-center gap-3 text-sm">
+                        <span className={`badge ${isCleared ? 'badge-ok' : 'badge-ng'}`}>
+                          <span aria-hidden="true">{isCleared ? '✓' : '□'}</span>{' '}
+                          {isCleared ? 'クリア済み' : '未クリア'}
+                        </span>
+                        <span className="w-14 text-right font-mono">{best[l.code] != null ? `${best[l.code]}/${QUIZ_SIZE}` : '－'}</span>
+                      </span>
+                    </Link>
+                  </li>
+                )
+              })}
             </ul>
           </div>
         ))}
