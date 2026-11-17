@@ -119,28 +119,33 @@ async function Top() {
                 const isCleared = cleared.has(l.code)
                 return (
                   <li key={l.id}>
-                    <Link
-                      href={isCleared ? `/lessons/${l.code}/quiz` : `/lessons/${l.code}`}
-                      className="card flex min-h-16 items-center justify-between gap-3 transition-transform hover:bg-[#f3f6fa] active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3d5a80]"
-                    >
-                      <span className="font-bold">{no}. {l.title}</span>
+                    <div className="card flex min-h-16 items-center justify-between gap-3 transition-transform hover:bg-[#f3f6fa]">
+                      <Link
+                        href={`/lessons/${l.code}`}
+                        className="font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3d5a80]"
+                      >
+                        {no}. {l.title}
+                      </Link>
                       <span className="flex shrink-0 items-center gap-3 text-sm">
                         <span className={`badge ${isCleared ? 'badge-ok' : 'badge-ng'}`}>
                           <span aria-hidden="true">{isCleared ? '✓' : '□'}</span>{' '}
                           {isCleared ? 'クリア済み' : '未クリア'}
                         </span>
                         {isCleared && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#3d5a80] bg-[#eef2f7] px-2.5 py-1 text-xs font-bold text-[#3d5a80]">
+                          <Link
+                            href={`/lessons/${l.code}/quiz`}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-[#3d5a80] bg-[#eef2f7] px-2.5 py-1 text-xs font-bold text-[#3d5a80] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3d5a80]"
+                          >
                             <svg aria-hidden="true" className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                               <rect x="3.5" y="2.5" width="9" height="11" rx="1" />
                               <path d="M6 2.5h4M6 6.5h4M6 9h1M8.5 9H10M6 11.5h1M8.5 11.5H10" />
                             </svg>
-                            確認テストへ
-                          </span>
+                            確認テストへ進む
+                          </Link>
                         )}
                         <span className="w-14 text-right font-mono">{best[l.code] != null ? `${best[l.code]}/${QUIZ_SIZE}` : '－'}</span>
                       </span>
-                    </Link>
+                    </div>
                   </li>
                 )
               })}
