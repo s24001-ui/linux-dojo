@@ -13,11 +13,14 @@ export default function ScenarioListView({ scenarios }: { scenarios: ScenarioRow
     ...commands.filter((command) => !command.toLowerCase().startsWith('git ') && !gitCommands.has(command.toLowerCase())),
     ...commands.filter((command) => command.toLowerCase().startsWith('git ') || gitCommands.has(command.toLowerCase())),
   ]
+  const normalizedQuery = query.trim().toLowerCase()
+  const visibleCommands = normalizedQuery
+    ? orderedCommands.filter((command) => command.toLowerCase().includes(normalizedQuery))
+    : []
   const filteredScenarios = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
     if (!normalizedQuery) return scenarios
     return scenarios.filter((scenario) => scenario.setup.commands.toLowerCase().includes(normalizedQuery))
-  }, [scenarios, query])
+  }, [scenarios, normalizedQuery])
 
   return (
     <div className="space-y-5">
@@ -49,22 +52,24 @@ export default function ScenarioListView({ scenarios }: { scenarios: ScenarioRow
           className="mt-1 w-full rounded border border-[#444] bg-white px-3 py-2 focus:border-[#3d5a80] focus:outline-none focus:ring-2 focus:ring-[#3d5a80]/30"
         />
       </label>
-      <div aria-label="使用コマンド一覧">
-        <div className="flex flex-wrap gap-2">
-          {orderedCommands.map((command) => (
-            <button
-              key={command}
-              type="button"
-              onClick={() => setQuery(command)}
-              className={`rounded-full border px-3 py-1 font-mono text-sm font-bold ${
-                query === command ? 'border-[#3d5a80] bg-[#3d5a80] text-white' : 'border-[#3d5a80] bg-[#eef2f7] text-[#3d5a80] hover:bg-[#dce6f2]'
-              }`}
-            >
-              {command}
-            </button>
-          ))}
+      {visibleCommands.length > 0 && (
+        <div aria-label="使用コマンド一覧">
+          <div className="flex flex-wrap gap-1">
+            {visibleCommands.map((command) => (
+              <button
+                key={command}
+                type="button"
+                onClick={() => setQuery(command)}
+                className={`rounded-full border px-2 py-0.5 font-mono text-xs font-bold ${
+                  query === command ? 'border-[#3d5a80] bg-[#3d5a80] text-white' : 'border-[#3d5a80] bg-[#eef2f7] text-[#3d5a80] hover:bg-[#dce6f2]'
+                }`}
+              >
+                {command}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {filteredScenarios.length > 0 ? (
         <ul className="space-y-2">
