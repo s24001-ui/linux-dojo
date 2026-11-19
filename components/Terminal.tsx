@@ -100,6 +100,7 @@ export default function Terminal({ term, className = 'h-72' }: { term: Term; cla
   const [cands, setCands] = useState<string[]>([]) // Tab補完の候補一覧
   const box = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
+  const lastTab = useRef(false) // 直前の操作が Tab だったか（2回目で候補一覧を出す）
   const history = term.log
 
   useEffect(() => {
@@ -113,6 +114,7 @@ export default function Terminal({ term, className = 'h-72' }: { term: Term; cla
       setValue('')
       setPos(null)
       setCands([])
+      lastTab.current = false
     } else if (e.key === 'Tab') {
       e.preventDefault() // ブラウザのフォーカス移動を止める
       if (e.nativeEvent.isComposing) return
@@ -120,11 +122,14 @@ export default function Terminal({ term, className = 'h-72' }: { term: Term; cla
       if (r.value !== value) {
         setValue(r.value)
         setCands([])
+        lastTab.current = false
       } else if (r.candidates.length > 1) {
-        setCands(r.candidates) // もう伸ばせないときの Tab で候補一覧を出す
+        if (lastTab.current) setCands(r.candidates) // 本物のシェルと同じく、2回目の Tab で候補一覧を出す
+        lastTab.current = true
       }
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault()
+      lastTab.current = false
       if (!history.length) return
       const next = e.key === 'ArrowUp' ? Math.max(0, (pos ?? history.length) - 1) : (pos ?? history.length) + 1
       if (next >= history.length) {
@@ -158,6 +163,7 @@ export default function Terminal({ term, className = 'h-72' }: { term: Term; cla
           onChange={(e) => {
             setValue(e.target.value)
             setCands([])
+            lastTab.current = false
           }}
           onKeyDown={onKey}
           spellCheck={false}
