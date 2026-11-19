@@ -5,11 +5,13 @@ import { Fs, HOME, Line, TermState, complete, diffFs, exec, shortPath } from '@/
 
 type Diff = { id: number; added: string[]; removed: Fs } // F-10：直前のコマンドで増減したもの
 
-type T = { s: TermState; lines: Line[]; log: string[]; diff: Diff | null }
+type TabCount = { completed: number; listed: number } // Tab補完を使った回数（completed=補完できた / listed=候補一覧を出した）
+
+type T = { s: TermState; lines: Line[]; log: string[]; diff: Diff | null; tabs: TabCount }
 
 // 疑似ターミナルの状態（F-02）。ターミナル・ファイルツリー・判定で共有する
 export function useTerminal(initialFs: Fs, initialCwd: string = HOME, preload: Line[] = []) {
-  const init = (): T => ({ s: { fs: initialFs, cwd: initialCwd }, lines: preload, log: [], diff: null })
+  const init = (): T => ({ s: { fs: initialFs, cwd: initialCwd }, lines: preload, log: [], diff: null, tabs: { completed: 0, listed: 0 } })
   const [t, setT] = useState(init)
   const remoteHydrated = useRef(false)
   const initialFsRef = useRef(initialFs)
@@ -70,12 +72,17 @@ export function useTerminal(initialFs: Fs, initialCwd: string = HOME, preload: L
       const changed = d.added.length > 0 || Object.keys(d.removed).length > 0
       return {
         s: r.state,
+        tabs: p.tabs,
         lines: [...p.lines, { kind: 'in', text: `${shortPath(p.s.cwd)}$ ${cmd}` }, ...r.out],
         log,
         diff: changed ? { id: (p.diff?.id ?? 0) + 1, ...d } : p.diff,
       }
     })
   }
+
+  // Tab補完を使った回数を数える（レッスンのクリア条件「tab」で使う）
+  const noteTab = (kind: 'completed' | 'listed') =>
+    setT((p) => ({ ...p, tabs: { ...p.tabs, [kind]: p.tabs[kind] + 1 } }))
 
   // ハイライトは2秒だけ見せる
   const diffId = t.diff?.id
@@ -87,7 +94,7 @@ export function useTerminal(initialFs: Fs, initialCwd: string = HOME, preload: L
 
   // 「リセット」「やり直し」：ファイルシステム・現在地・履歴を初期状態に戻す（F-03）
   const reset = () => setT(init())
-  return { fs: t.s.fs, cwd: t.s.cwd, lines: t.lines, log: t.log, diff: t.diff, run, reset }
+  return { fs: t.s.fs, cwd: t.s.cwd, lines: t.lines, log: t.log, diff: t.diff, tabs: t.tabs, run, noteTab, reset }
 }
 export type Term = ReturnType<typeof useTerminal>
 
@@ -123,8 +130,12 @@ export default function Terminal({ term, className = 'h-72' }: { term: Term; cla
         setValue(r.value)
         setCands([])
         lastTab.current = false
+        term.noteTab('completed')
       } else if (r.candidates.length > 1) {
-        if (lastTab.current) setCands(r.candidates) // 本物のシェルと同じく、2回目の Tab で候補一覧を出す
+        if (lastTab.current) {
+          setCands(r.candidates) // 本物のシェルと同じく、2回目の Tab で候補一覧を出す
+          term.noteTab('listed')
+        }
         lastTab.current = true
       }
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {

@@ -6,17 +6,17 @@ insert into lessons (code, title, sort_order, category) values ($s$ls$s$, $s$フ
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
 insert into lessons (code, title, sort_order, category) values ($s$cd$s$, $s$移動してみよう（cd・pwd）$s$, 2, $s$基本操作$s$)
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
-insert into lessons (code, title, sort_order, category) values ($s$mkdir$s$, $s$作ってみよう（mkdir・touch）$s$, 3, $s$ファイル操作$s$)
+insert into lessons (code, title, sort_order, category) values ($s$mkdir$s$, $s$作ってみよう（mkdir・touch）$s$, 4, $s$ファイル操作$s$)
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
-insert into lessons (code, title, sort_order, category) values ($s$cat$s$, $s$中身を読んでみよう（cat）$s$, 4, $s$ファイル操作$s$)
+insert into lessons (code, title, sort_order, category) values ($s$cat$s$, $s$中身を読んでみよう（cat）$s$, 5, $s$ファイル操作$s$)
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
-insert into lessons (code, title, sort_order, category) values ($s$echo$s$, $s$文字を書いてみよう（echo）$s$, 5, $s$ファイル操作$s$)
+insert into lessons (code, title, sort_order, category) values ($s$echo$s$, $s$文字を書いてみよう（echo）$s$, 6, $s$ファイル操作$s$)
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
-insert into lessons (code, title, sort_order, category) values ($s$cp$s$, $s$コピーしてみよう（cp）$s$, 6, $s$ファイル操作$s$)
+insert into lessons (code, title, sort_order, category) values ($s$cp$s$, $s$コピーしてみよう（cp）$s$, 7, $s$ファイル操作$s$)
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
-insert into lessons (code, title, sort_order, category) values ($s$mv$s$, $s$移動・名前変更をしてみよう（mv）$s$, 7, $s$ファイル操作$s$)
+insert into lessons (code, title, sort_order, category) values ($s$mv$s$, $s$移動・名前変更をしてみよう（mv）$s$, 8, $s$ファイル操作$s$)
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
-insert into lessons (code, title, sort_order, category) values ($s$rm$s$, $s$削除してみよう（rm）$s$, 8, $s$ファイル操作$s$)
+insert into lessons (code, title, sort_order, category) values ($s$rm$s$, $s$削除してみよう（rm）$s$, 9, $s$ファイル操作$s$)
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
 
 insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
@@ -387,11 +387,11 @@ begin
 end
 $seed3$;
 
-insert into lessons (code, title, sort_order, category) values ($s$git-init$s$, $s$リポジトリを作ってみよう（git init・status）$s$, 9, $s$Git$s$)
+insert into lessons (code, title, sort_order, category) values ($s$git-init$s$, $s$リポジトリを作ってみよう（git init・status）$s$, 10, $s$Git$s$)
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
-insert into lessons (code, title, sort_order, category) values ($s$git-commit$s$, $s$記録してみよう（git add・commit）$s$, 10, $s$Git$s$)
+insert into lessons (code, title, sort_order, category) values ($s$git-commit$s$, $s$記録してみよう（git add・commit）$s$, 11, $s$Git$s$)
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
-insert into lessons (code, title, sort_order, category) values ($s$git-log$s$, $s$履歴と変更を見てみよう（git log・diff）$s$, 11, $s$Git$s$)
+insert into lessons (code, title, sort_order, category) values ($s$git-log$s$, $s$履歴と変更を見てみよう（git log・diff）$s$, 12, $s$Git$s$)
   on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
  
 insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
@@ -717,3 +717,53 @@ where not exists (select 1 from questions where question_type = 'scenario' and t
 insert into questions (question_type, command_tag, title, body, setup_data)
 select 'scenario', $s$git clone$s$, $s$リポジトリをコピーして貢献しよう$s$, $s$チームの memo-app（https://github.com/team/memo-app.git）に参加します。リポジトリを手元にコピーし、CONTRIBUTING.md（参加のルール）を追加してコミットし、origin に送りましょう。$s$, $j${"summary":"clone してコピーを作り、ファイルを追加して push する","commands":"git clone / cd / echo / add / commit / push","fs":{"files":{".sim-remotes/memo-app.json":"{\"defaultBranch\":\"main\",\"branches\":{\"main\":\"50558ec2fb0d6cbeb31eb611368ab611158864aa\"},\"commits\":[{\"id\":\"9b13a873bbaa10f3e774f666283558ecbce98ff4\",\"msg\":\"first commit\",\"date\":\"Mon Nov 16 10:00:00 2026 +0900\",\"tree\":{\"README.md\":\"# memo-app\\n\",\"app.js\":\"console.log(\\\"memo\\\")\\n\"},\"parents\":[]},{\"id\":\"50558ec2fb0d6cbeb31eb611368ab611158864aa\",\"msg\":\"app.js を更新\",\"date\":\"Mon Nov 16 10:00:00 2026 +0900\",\"tree\":{\"README.md\":\"# memo-app\\n\",\"app.js\":\"console.log(\\\"memo v2\\\")\\n\"},\"parents\":[\"9b13a873bbaa10f3e774f666283558ecbce98ff4\"]}],\"files\":{\"README.md\":\"# memo-app\\n\",\"app.js\":\"console.log(\\\"memo v2\\\")\\n\"}}"}},"goals":[{"label":"memo-app を clone して、手元にコピーを作る","hints":["コピーするコマンドは？ URL を指定します。","git clone https://github.com/team/memo-app.git"],"dirs":["memo-app/.git"],"files":["memo-app/README.md"]},{"label":"CONTRIBUTING.md を作って、コミットする","hints":["clone でできたフォルダの中に移動してから、ファイルを作ります。","cd memo-app → echo \"質問は Issue へ\" > CONTRIBUTING.md → git add CONTRIBUTING.md → git commit -m \"参加のルールを追加\""],"git":{"repo":"memo-app","committed":["CONTRIBUTING.md"],"clean":true}},{"label":"コミットを origin の main に送る","hints":["送るコマンドは push です。","git push origin main"],"git":{"repo":"memo-app","pushed":true,"committed":["CONTRIBUTING.md"]}}],"checks":[{"git":{"repo":"memo-app","clean":true,"pushed":true}}]}$j$::jsonb
 where not exists (select 1 from questions where question_type = 'scenario' and title = $s$リポジトリをコピーして貢献しよう$s$);
+
+-- ========== Tab補完レッスン（tab）：基本操作 / ls・cd の次 ==========
+insert into lessons (code, title, sort_order, category) values ($s$tab$s$, $s$Tab で入力をラクにしよう（Tab補完）$s$, 3, $s$基本操作$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data) values
+  ((select id from lessons where code=$s$tab$s$), 1,
+   $s$cat mem まで入力して、Tab キーを押してみましょう。memo.txt と補完されたら、Enter で実行します。$s$,
+   $s$「cat mem」と打ってから Tab を押すと、cat memo.txt になります。cat はファイルの中身を表示するコマンドです。$s$,
+   $j${"commands": ["^cat\\s+memo\\.txt$"], "tab": {"completed": 1}}$j$::jsonb,
+   $j${"files": {"memo.txt": "あとで読む", "documents/monthly_report_2026.txt": "2026年の月次レポート", "documents/meeting_notes.txt": "会議のメモ", "documents/memo_draft.txt": "メモの下書き"}}$j$::jsonb),
+  ((select id from lessons where code=$s$tab$s$), 2,
+   $s$cd doc まで入力して Tab を押し、documents フォルダへ移動しましょう。$s$,
+   $s$フォルダ名を補完すると、最後に「/」がつきます。そのまま Enter で移動できます。$s$,
+   $j${"cwd": "~/documents", "tab": {"completed": 1}}$j$::jsonb,
+   null),
+  ((select id from lessons where code=$s$tab$s$), 3,
+   $s$いま documents フォルダにいます。cat monthly_re まで入力して Tab で長いファイル名を補完し、中身を表示しましょう。$s$,
+   $s$ls で名前を確かめなくても、最初の数文字を打って Tab を押せば、残りは自動で入力されます。$s$,
+   $j${"commands": ["^cat\\s+monthly_report_2026\\.txt$"], "tab": {"completed": 1}}$j$::jsonb,
+   null),
+  ((select id from lessons where code=$s$tab$s$), 4,
+   $s$cat me まで入力して、Tab を2回押してみましょう。me で始まるファイルが複数あるので、候補が一覧で出ます。そのあと cat meeting_notes.txt を実行しましょう。$s$,
+   $s$候補が複数あるとき、1回目の Tab では何も起きません。もう1回押すと候補が出ます。続きを打って（例：cat mee）Tab を押せば補完できます。$s$,
+   $j${"commands": ["^cat\\s+meeting_notes\\.txt$"], "tab": {"listed": 1}}$j$::jsonb,
+   null),
+  ((select id from lessons where code=$s$tab$s$), 5,
+   $s$mkd まで入力して Tab を押すと、コマンド名も補完できます。mkdir になったら、続けて project と入力して実行し、project フォルダを作りましょう。$s$,
+   $s$mkd のあとに Tab を押すと「mkdir 」になります。そのあとに project と打って Enter を押します。$s$,
+   $j${"dirs": ["documents/project"], "tab": {"completed": 1}}$j$::jsonb,
+   null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+
+-- 確認テスト5問（tab の問題がまだ無いときだけ入る。何度実行しても増えない）
+do $tabq$
+begin
+  if exists (select 1 from questions where lesson_id = (select id from lessons where code=$s$tab$s$)) then return; end if;
+
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$tab$s$), 'quiz', $s$tab$s$, $s$cat mem と入力して Tab を押したとき、mem で始まるファイルが memo.txt だけなら、どうなる？$s$, $j$["Enter を押したのと同じように、すぐに実行される", "cat memo.txt のように、名前が最後まで自動で入力される", "エラーが表示される", "何も起きない"]$j$::jsonb, 1, $s$当てはまる候補が1つだけのときは、Tab を押すと残りの文字が自動で入力されます。実行はされないので、確認してから Enter を押します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$tab$s$), 'quiz', $s$tab$s$, $s$mkd と入力して Tab を押すと、何が補完される？$s$, $j$["補完されない（コマンド名は補完できない）", "mkdir -p", "mkdir", "touch"]$j$::jsonb, 2, $s$Tab はファイル名やフォルダ名だけでなく、コマンド名も補完できます。mkd で始まるコマンドは mkdir だけなので、mkdir になります。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$tab$s$), 'quiz', $s$tab$s$, $s$cd doc と入力して Tab を押すと、フォルダ名はどのように補完される？$s$, $j$["documents/（最後に / がつく）", "documents（何もつかない）", "Documents（先頭が大文字になる）", "documents.txt"]$j$::jsonb, 0, $s$フォルダを補完すると、最後に「/」がつきます。フォルダだと分かるので、続けてその中の名前を入力して、さらに Tab で補完することもできます。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$tab$s$), 'quiz', $s$tab$s$, $s$me で始まるファイルが2つ以上あるとき、cat me の状態で Tab を2回押すと、どうなる？$s$, $j$["最初のファイルが自動で選ばれる", "ファイルがすべて削除される", "エラーで終了する", "候補のファイル名が一覧で表示される"]$j$::jsonb, 3, $s$候補が複数あるときは、1回目の Tab では何も起きません。2回目で候補が一覧で表示されるので、続きの文字を入力して、もう一度 Tab を押します。$s$);
+  insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+    values ((select id from lessons where code=$s$tab$s$), 'quiz', $s$tab$s$, $s$Tab を押しても何も補完されないとき、まず確認することはどれ？$s$, $j$["パソコンを再起動する", "当てはまる名前のファイルやフォルダがあるか（綴りや、いまいる場所）", "Enter を連打する", "別のブラウザを使う"]$j$::jsonb, 1, $s$当てはまる名前が1つもないと、Tab を押しても何も起きません。綴りが合っているか、ls でいまの場所にあるかを確認しましょう。$s$);
+end
+$tabq$;

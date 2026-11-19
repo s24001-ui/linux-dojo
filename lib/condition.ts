@@ -10,6 +10,7 @@ export type Cond = {
   absent?: string[] // これらが存在しないこと
   commands?: string[] // 入力したコマンド履歴の中に、この正規表現に合うものがあること
   git?: GitCond // Git の状態（コミットできたか、ブランチ、リモートなど）
+  tab?: { completed?: number; listed?: number } // そのステップで Tab 補完を使った回数が、これ以上（completed=補完できた回数 / listed=候補一覧を出した回数）
 }
 // Git の状態の条件。書いたものは すべて満たしたとき成功。省略した項目は見ない
 export type GitCond = {
@@ -26,7 +27,7 @@ export type GitCond = {
   branchFiles?: Record<string, string[]> // 指定したブランチの最新コミットに、これらのファイルが入っている
 }
 export type FsSpec = { dirs?: string[]; files?: Record<string, string> }
-export type Ctx = { fs: Fs; cwd: string; log: string[] }
+export type Ctx = { fs: Fs; cwd: string; log: string[]; tab?: { completed: number; listed: number } } // tab … そのステップで Tab 補完を使った回数（レッスン画面だけが渡す）
 
 export const toAbs = (p: string) => (p === '~' ? HOME : p.startsWith('~/') ? HOME + p.slice(1) : p.startsWith('/') ? p : `${HOME}/${p}`)
 
@@ -51,6 +52,7 @@ function gitOk(g: GitCond, x: Ctx): boolean {
 export function passes(c: Cond, x: Ctx): boolean {
   return (
     (c.git === undefined || gitOk(c.git, x)) &&
+    (c.tab === undefined || ((x.tab?.completed ?? 0) >= (c.tab.completed ?? 0) && (x.tab?.listed ?? 0) >= (c.tab.listed ?? 0))) &&
     (c.cwd === undefined || x.cwd === toAbs(c.cwd)) &&
     (c.dirs ?? []).every((p) => isDir(x.fs, toAbs(p))) &&
     (c.files ?? []).every((p) => isFile(x.fs, toAbs(p))) &&
