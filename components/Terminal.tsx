@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Fs, HOME, Line, TermState, diffFs, exec, shortPath } from '@/lib/terminal'
+import { Fs, HOME, Line, TermState, complete, diffFs, exec, shortPath } from '@/lib/terminal'
 
 type Diff = { id: number; added: string[]; removed: Fs } // F-10：直前のコマンドで増減したもの
 
@@ -97,6 +97,7 @@ const COLOR: Record<Line['kind'], string> = { in: 'text-[#9ad0ff]', out: '', err
 export default function Terminal({ term, className = 'h-72' }: { term: Term; className?: string }) {
   const [value, setValue] = useState('')
   const [pos, setPos] = useState<number | null>(null)
+  const [cands, setCands] = useState<string[]>([]) // Tab補完の候補一覧
   const box = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const history = term.log
@@ -111,6 +112,17 @@ export default function Terminal({ term, className = 'h-72' }: { term: Term; cla
       term.run(value)
       setValue('')
       setPos(null)
+      setCands([])
+    } else if (e.key === 'Tab') {
+      e.preventDefault() // ブラウザのフォーカス移動を止める
+      if (e.nativeEvent.isComposing) return
+      const r = complete({ fs: term.fs, cwd: term.cwd }, value)
+      if (r.value !== value) {
+        setValue(r.value)
+        setCands([])
+      } else if (r.candidates.length > 1) {
+        setCands(r.candidates) // もう伸ばせないときの Tab で候補一覧を出す
+      }
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault()
       if (!history.length) return
@@ -143,7 +155,10 @@ export default function Terminal({ term, className = 'h-72' }: { term: Term; cla
         <input
           ref={input}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value)
+            setCands([])
+          }}
           onKeyDown={onKey}
           spellCheck={false}
           autoCapitalize="off"
@@ -152,6 +167,12 @@ export default function Terminal({ term, className = 'h-72' }: { term: Term; cla
           className="min-w-0 flex-1 bg-transparent text-[#e6e6e6] outline-none"
         />
       </div>
+      {cands.length > 0 && (
+        <div className="whitespace-pre-wrap break-all text-[#ffd479]">
+          {cands.slice(0, 20).join('  ')}
+          {cands.length > 20 && `  …ほか ${cands.length - 20} 件`}
+        </div>
+      )}
     </div>
   )
 }

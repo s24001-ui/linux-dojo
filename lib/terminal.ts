@@ -980,6 +980,79 @@ export function gitSnapshot(fs: Fs, cwd: string, repo?: string): GitSnapshot | n
 /* ---------- 入力の解析と実行 ---------- */
 
 // 空白で区切り、引用符（"" または ''）の中は1つの引数にする
+/* ---------- Tab 補完 ---------- */
+
+const commonPrefix = (xs: string[]) =>
+  xs.reduce((a, b) => {
+    let i = 0
+    while (i < a.length && i < b.length && a[i] === b[i]) i++
+    return a.slice(0, i)
+  })
+
+// 入力の最後の単語を補完する。候補が1つなら確定、複数なら共通部分まで伸ばす
+export function complete(state: TermState, input: string): { value: string; candidates: string[] } {
+  const none = { value: input, candidates: [] as string[] }
+  const i = input.search(/\S*$/)
+  const head = input.slice(0, i) // 最後の単語より前（末尾のスペース込み）
+  const word = input.slice(i) // 補完する単語
+  if (/["']/.test(word)) return none // 引用符つきは補完しない
+
+  // 最後の | より後ろだけを見る（cat a | gr → コマンド名の位置）
+  const seg = head.slice(head.lastIndexOf('|') + 1).trim()
+  const words = seg === '' ? [] : seg.split(/\s+/) // 補完する単語より前の単語
+  const isCommand = words.length === 0
+
+  let base: string // 補完結果の先頭に残す部分
+  let names: string[] // 候補（フォルダは末尾に / 付き）
+  let prefix: string // 前方一致させる文字
+
+  // git のあとの単語（サブコマンド・ブランチ名・リモート名）
+  const gitNames = (): string[] | null => {
+    if (words[0] !== 'git' || word.startsWith('-')) return null
+    if (words.length === 1) return GIT_SUBS
+    const snap = gitSnapshot(state.fs, state.cwd)
+    const sub = words[1]
+    if (['switch', 'checkout', 'merge'].includes(sub) && words.length === 2) return snap?.branches ?? []
+    if (sub === 'remote' && words.length === 2) return ['add']
+    if (['push', 'pull'].includes(sub)) {
+      if (words.length === 2) return snap?.remotes ?? []
+      if (words.length === 3) return snap?.branches ?? []
+    }
+    return null // それ以外（git add のファイル名など）は、通常のパス補完
+  }
+  const gitList = isCommand ? null : gitNames()
+
+  if (isCommand) {
+    base = head
+    prefix = word
+    names = [...Object.keys(commands), 'clear'].filter((n) => n.startsWith(prefix)).sort()
+  } else if (gitList) {
+    base = head
+    prefix = word
+    names = gitList.filter((n) => n.startsWith(prefix))
+  } else {
+    const slash = word.lastIndexOf('/')
+    const dirPart = slash >= 0 ? word.slice(0, slash + 1) : ''
+    prefix = word.slice(slash + 1)
+    base = head + dirPart
+    const dir = resolve(state.cwd, dirPart || '.')
+    if (!isDir(state.fs, dir) || dir.includes('/.sim-remotes')) return none
+    names = childrenOf(state.fs, dir)
+      .filter((n) => !/[\s"']/.test(n)) // スペースや引用符を含む名前は補完しない
+      .filter((n) => n !== '.sim-remotes') // 疑似リモートの保存データは見せない
+      .filter((n) => !n.startsWith('.') || prefix.startsWith('.')) // 隠しファイルは . を打ったときだけ
+      .filter((n) => n.startsWith(prefix))
+      .map((n) => (isDir(state.fs, `${dir === '/' ? '' : dir}/${n}`) ? n + '/' : n))
+  }
+
+  if (!names.length) return none
+  if (names.length === 1) {
+    const n = names[0]
+    return { value: base + n + (n.endsWith('/') ? '' : ' '), candidates: names }
+  }
+  return { value: base + commonPrefix(names), candidates: names }
+}
+
 export function tokenize(input: string): string[] {
   return [...input.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3])
 }
