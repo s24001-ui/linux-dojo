@@ -14,16 +14,11 @@ export default function LessonView({ lesson, steps }: { lesson: Pick<LessonRow, 
   const term = useTerminal(makeFs(first ?? {}), first?.cwd ? toAbs(first.cwd) : undefined)
   const [step, setStep] = useState(0)
   const [start, setStart] = useState(0) // このステップを始めたときのコマンド履歴の位置
-  const [startTab, setStartTab] = useState({ completed: 0, listed: 0 }) // このステップを始めたときの Tab 補完の回数
   const [hint, setHint] = useState(false)
   const total = steps.length
   const cur = steps[step]
   // そのステップを始めてからの入力と、ファイルシステムの最終状態で判定する
-  const tab = {
-    completed: Math.max(0, term.tabs.completed - startTab.completed),
-    listed: Math.max(0, term.tabs.listed - startTab.listed),
-  }
-  const cleared = passes(cur.clear_condition, { fs: term.fs, cwd: term.cwd, log: term.log.slice(start), tab })
+  const cleared = passes(cur.clear_condition, { fs: term.fs, cwd: term.cwd, log: term.log.slice(start), tabLog: term.tabLog.slice(start) })
   const last = step === total - 1
 
   // 全ステップをクリアしたときだけ、進捗をDBに登録（1回だけ）
@@ -38,7 +33,6 @@ export default function LessonView({ lesson, steps }: { lesson: Pick<LessonRow, 
   const next = () => {
     setStep(step + 1)
     setStart(term.log.length)
-    setStartTab(term.tabs)
     setHint(false)
   }
 

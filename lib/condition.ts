@@ -10,8 +10,10 @@ export type Cond = {
   absent?: string[] // これらが存在しないこと
   commands?: string[] // 入力したコマンド履歴の中に、この正規表現に合うものがあること
   git?: GitCond // Git の状態（コミットできたか、ブランチ、リモートなど）
-  tab?: { completed?: number; listed?: number } // そのステップで Tab 補完を使った回数が、これ以上（completed=補完できた回数 / listed=候補一覧を出した回数）
+  tab?: { completed?: boolean; listed?: boolean } // commands に合う入力のとき Tab 補完を使っていたこと（completed=補完した / listed=候補一覧を出した）。commands と一緒に書く
 }
+// 1回の入力（Enter まで）で Tab 補完を使ったか
+export type TabUse = { completed: boolean; listed: boolean }
 // Git の状態の条件。書いたものは すべて満たしたとき成功。省略した項目は見ない
 export type GitCond = {
   repo?: string // リポジトリのフォルダ（ホームからの相対パス）。省略すると、いまの場所から探す
@@ -27,7 +29,7 @@ export type GitCond = {
   branchFiles?: Record<string, string[]> // 指定したブランチの最新コミットに、これらのファイルが入っている
 }
 export type FsSpec = { dirs?: string[]; files?: Record<string, string> }
-export type Ctx = { fs: Fs; cwd: string; log: string[]; tab?: { completed: number; listed: number } } // tab … そのステップで Tab 補完を使った回数（レッスン画面だけが渡す）
+export type Ctx = { fs: Fs; cwd: string; log: string[]; tabLog?: TabUse[] } // tabLog … log と同じ順番で、各入力で Tab を使ったか（レッスン画面だけが渡す）
 
 export const toAbs = (p: string) => (p === '~' ? HOME : p.startsWith('~/') ? HOME + p.slice(1) : p.startsWith('/') ? p : `${HOME}/${p}`)
 
@@ -49,10 +51,20 @@ function gitOk(g: GitCond, x: Ctx): boolean {
   )
 }
 
+// 「Tab を使って打った、その入力」が履歴にあるか（commands に合う入力の、Tab の使用記録を見る）
+function tabOk(c: Cond, x: Ctx): boolean {
+  if (c.tab === undefined) return true
+  const res = (c.commands ?? []).map((re) => new RegExp(re))
+  return x.log.some((l, i) => {
+    const used = x.tabLog?.[i]
+    return res.every((r) => r.test(l.trim())) && (!c.tab?.completed || used?.completed === true) && (!c.tab?.listed || used?.listed === true)
+  })
+}
+
 export function passes(c: Cond, x: Ctx): boolean {
   return (
     (c.git === undefined || gitOk(c.git, x)) &&
-    (c.tab === undefined || ((x.tab?.completed ?? 0) >= (c.tab.completed ?? 0) && (x.tab?.listed ?? 0) >= (c.tab.listed ?? 0))) &&
+    tabOk(c, x) &&
     (c.cwd === undefined || x.cwd === toAbs(c.cwd)) &&
     (c.dirs ?? []).every((p) => isDir(x.fs, toAbs(p))) &&
     (c.files ?? []).every((p) => isFile(x.fs, toAbs(p))) &&
