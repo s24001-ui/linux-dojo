@@ -767,3 +767,79 @@ begin
     values ((select id from lessons where code=$s$tab$s$), 'quiz', $s$tab$s$, $s$Tab を押しても何も補完されないとき、まず確認することはどれ？$s$, $j$["パソコンを再起動する", "当てはまる名前のファイルやフォルダがあるか（綴りや、いまいる場所）", "Enter を連打する", "別のブラウザを使う"]$j$::jsonb, 1, $s$当てはまる名前が1つもないと、Tab を押しても何も起きません。綴りが合っているか、ls でいまの場所にあるかを確認しましょう。$s$);
 end
 $tabq$;
+
+-- Linuxコマンド道場：chmod のレッスン（「権限を変えてみよう（chmod）」）を追加する
+-- Supabase の SQL Editor に貼り付けて実行する。何度実行しても壊れない（確認テストは、まだ無いときだけ入る）。
+-- 先に、lib/terminal.ts・lib/condition.ts を新しい版に置き換えて、Vercel にデプロイしておくこと
+-- （chmod が動かない版のまま、レッスンだけ先に公開しない）。
+--
+-- 並び順：ファイル操作の rm（80）のあと、テキスト操作の head（90）の前 → sort_order = 85
+
+insert into lessons (code, title, sort_order, category)
+  values ($s$chmod$s$, $s$権限を変えてみよう（chmod）$s$, 85, $s$ファイル操作$s$)
+  on conflict (code) do update set title = excluded.title, sort_order = excluded.sort_order, category = excluded.category;
+
+-- ステップ1：ls -l で権限を見る（1ステップ目に、最初のファイル構成と権限が入る）
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$chmod$s$), 1,
+    $s$ls -l で、ファイルの権限を見てみましょう。左端の rwx の並びが権限です。$s$,
+    $s$ls -l と入力します。左端の10文字のうち、2〜4文字目が自分（所有者）の権限です。r=読む・w=書く・x=実行で、- はその権限がないことを表します。$s$,
+    $j${"commands": ["^ls\\s+-\\w*l"]}$j$::jsonb,
+    $j${"files": {"hello.sh": "#!/bin/bash\necho Hello!\n", "memo.txt": "あとで読む", "secret.txt": "ひみつのメモ"}, "modes": {"secret.txt": "000"}}$j$::jsonb)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+
+-- ステップ2：実行権限がなくて失敗するのを体験する
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$chmod$s$), 2,
+    $s$./hello.sh と入力して、hello.sh を実行してみましょう。エラーが出ます（それで正解です）。$s$,
+    $s$./ は「いまいるフォルダの」という意味です。./hello.sh と入力します。$s$,
+    $j${"commands": ["^\\./hello\\.sh$"]}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+
+-- ステップ3：記号（+x）で実行権限をつけて、実行する（記号で書くことが必須）
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$chmod$s$), 3,
+    $s$エラーの原因は、hello.sh に実行権限（x）がないことです。chmod に記号を使って実行権限をつけ、もう一度 ./hello.sh を実行しましょう。$s$,
+    $s$chmod +x hello.sh と入力して権限をつけ、そのあと ./hello.sh を実行します。+ は「足す」、x は「実行」の意味です。$s$,
+    $j${"commands": ["^chmod\\s+[ugoa]*[-+=][rwx]+\\s+(\\./)?hello\\.sh$", "^\\./hello\\.sh$"], "userPerms": {"hello.sh": "x"}}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+
+-- ステップ4：数字（644）で権限を決める（数字で書くことが必須）
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$chmod$s$), 4,
+    $s$chmod に数字を使って、hello.sh の権限を 644（rw-r--r--）に戻しましょう。もう実行はできなくなります。$s$,
+    $s$数字は左から「自分・グループ・その他」の順で、r=4・w=2・x=1 の足し算です。6=4+2（rw-）、4（r--）。chmod 644 hello.sh と入力します。$s$,
+    $j${"commands": ["^chmod\\s+[0-7]{3}\\s+(\\./)?hello\\.sh$"], "modes": {"hello.sh": "644"}}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+
+-- ステップ5：数字（600）で、読めないファイルを読めるようにする（数字で書くことが必須）
+insert into lesson_steps (lesson_id, step_number, body, hint, clear_condition, setup_data)
+  values ((select id from lessons where code=$s$chmod$s$), 5,
+    $s$secret.txt は、誰も読めない状態（----------）です。数字で 600（自分だけが読み書きできる）にして、cat で中身を読みましょう。$s$,
+    $s$先に cat secret.txt を試すと Permission denied になります。chmod 600 secret.txt で権限を変えてから、cat secret.txt で読みます。$s$,
+    $j${"commands": ["^chmod\\s+[0-7]{3}\\s+(\\./)?secret\\.txt$", "^cat\\s+(\\./)?secret\\.txt$"], "modes": {"secret.txt": "600"}}$j$::jsonb, null)
+  on conflict (lesson_id, step_number) do update set body = excluded.body, hint = excluded.hint, clear_condition = excluded.clear_condition, setup_data = excluded.setup_data;
+
+-- 確認テスト5問（このレッスンの確認テストがまだ無いときだけ入る。回答履歴を消さないため）
+insert into questions (lesson_id, question_type, command_tag, body, choices, correct_index, explanation)
+select l.id, 'quiz', 'chmod', v.body, v.choices::jsonb, v.correct_index, v.explanation
+from lessons l,
+(values
+  ($s$run.sh に実行権限をつけるコマンドはどれ？$s$,
+   $j$["chmod +x run.sh", "chmod -x run.sh", "chmod 000 run.sh", "ls -l run.sh"]$j$, 0,
+   $s$chmod は change mode の略で、権限を変えるコマンドです。+x は「実行権限（x）を足す」、-x は「外す」という意味です。$s$),
+  ($s$権限の数字「6」は、どの組み合わせ？$s$,
+   $j$["r-x（読む・実行する）", "rw-（読む・書く）", "rwx（すべて）", "-w-（書くだけ）"]$j$, 1,
+   $s$r=4・w=2・x=1 の足し算で決まります。6=4+2 なので、r（読む）と w（書く）で rw- です。$s$),
+  ($s$chmod 755 run.sh のあと、自分（所有者）にできることはどれ？$s$,
+   $j$["読むことだけ", "読む・書く（実行はできない）", "読む・書く・実行する（すべて）", "何もできない"]$j$, 2,
+   $s$左端の 7 が自分の権限で、7=4+2+1 なので rwx（読む・書く・実行）です。右の 5 5 は、グループとその他が r-x（読む・実行）という意味です。$s$),
+  ($s$ls -l で -rwxr-xr-x と表示された権限を、数字で表すとどれ？$s$,
+   $j$["644", "755", "700", "777"]$j$, 1,
+   $s$3文字ずつ区切って足し算します。rwx=7、r-x=5、r-x=5 なので 755 です。$s$),
+  ($s$./run.sh を実行したら Permission denied と出ました。まず確認することはどれ？$s$,
+   $j$["ls -l run.sh で、x（実行権限）があるか", "rm run.sh でファイルを消す", "cat run.sh で中身を読む", "mkdir run.sh でフォルダを作る"]$j$, 0,
+   $s$Permission denied は「権限がない」というエラーです。ls -l で権限を確認し、実行したいのに x がなければ chmod +x で足します。$s$)
+) as v(body, choices, correct_index, explanation)
+where l.code = $s$chmod$s$
+  and not exists (select 1 from questions q where q.lesson_id = l.id and q.question_type = 'quiz');

@@ -8,12 +8,13 @@ export type TermState = { fs: Fs; cwd: string }
 export type Line = { kind: 'in' | 'out' | 'err' | 'note'; text: string }
 
 export const HOME = '/home/student'
+const MODES_FILE = '/.sim-modes' // 権限（chmod）の表を JSON で入れる隠しファイル。ls・補完・ファイルツリーには出さない
 
 /* ---------- F-03 疑似ファイルシステム ---------- */
 
 // 初期ファイル構成データ → 木構造。パスはホームからの相対で書く
 // 例: makeFs({ dirs: ['work'], files: { 'docs/a.txt': '中身' } })
-export function makeFs(spec: { dirs?: string[]; files?: Record<string, string> }): Fs {
+export function makeFs(spec: { dirs?: string[]; files?: Record<string, string>; modes?: Record<string, string> }): Fs {
   const fs: Fs = { '/': null, '/home': null, [HOME]: null }
   const addParents = (p: string) => {
     const parts = p.split('/').slice(0, -1)
@@ -27,6 +28,8 @@ export function makeFs(spec: { dirs?: string[]; files?: Record<string, string> }
     addParents(p)
     fs[`${HOME}/${p}`] = c
   }
+  // 最初から権限を変えておきたいもの（例: { "secret.txt": "000" }）。書かなければ フォルダ755・ファイル644
+  if (spec.modes) fs[MODES_FILE] = JSON.stringify(Object.fromEntries(Object.entries(spec.modes).map(([k, v]) => [`${HOME}/${k}`, v])))
   return fs
 }
 
@@ -48,9 +51,37 @@ export function resolve(cwd: string, p: string): string {
 
 const parentOf = (p: string) => p.replace(/\/[^/]*$/, '') || '/'
 const baseOf = (p: string) => p.split('/').pop() ?? ''
+
+/* ---------- パーミッション（chmod / ls -l） ----------
+   権限は「パス → 8進の文字列（例 "755"）」の表を JSON にして、隠しファイル /.sim-modes に置く。
+   表にないものは、フォルダ 755・ファイル 644（実際の Linux の初期値）として扱う。
+   このターミナルの持ち主は student ひとりなので、許可の判定には「所有者（左の3文字）」だけを使う。 */
+const readModes = (fs: Fs): Record<string, string> => {
+  try {
+    const v = fs[MODES_FILE]
+    return typeof v === 'string' ? (JSON.parse(v) as Record<string, string>) : {}
+  } catch {
+    return {}
+  }
+}
+// 表を書き換えた fs を返す。表が空のままなら、隠しファイルは作らない
+function withModes(fs: Fs, change: (m: Record<string, string>) => void): Fs {
+  const m = readModes(fs)
+  change(m)
+  const json = JSON.stringify(m)
+  return !(MODES_FILE in fs) && json === '{}' ? fs : { ...fs, [MODES_FILE]: json }
+}
+export const getMode = (fs: Fs, path: string): number => {
+  const v = readModes(fs)[path]
+  return v !== undefined ? parseInt(v, 8) : isDir(fs, path) ? 0o755 : 0o644
+}
+const can = (fs: Fs, path: string, bit: 4 | 2 | 1) => (getMode(fs, path) & (bit << 6)) !== 0 // 所有者の r=4 / w=2 / x=1
+const modeString = (mode: number, dir: boolean) =>
+  (dir ? 'd' : '-') + [6, 3, 0].map((sh) => [4, 2, 1].map((b, i) => ((mode >> sh) & b ? 'rwx'[i] : '-')).join('')).join('')
+const dropModes = (fs: Fs, path: string): Fs => withModes(fs, (m) => { for (const k of Object.keys(m)) if (k === path || k.startsWith(path + '/')) delete m[k] })
 const linesOf = (content: string) => content === '' ? [] : content.replace(/\n$/, '').split('\n')
 const childrenOf = (fs: Fs, dir: string) =>
-  Object.keys(fs).filter((k) => k !== '/' && k !== dir && parentOf(k) === dir).map(baseOf).sort()
+  Object.keys(fs).filter((k) => k !== '/' && k !== MODES_FILE && k !== dir && parentOf(k) === dir).map(baseOf).sort()
 
 export const shortPath = (cwd: string) =>
   cwd === HOME ? '~' : cwd.startsWith(HOME + '/') ? '~' + cwd.slice(HOME.length) : cwd
@@ -85,6 +116,8 @@ const EXPLAIN: [RegExp, string][] = [
   [/local changes would be overwritten/, '記録していない変更があるため、切り替えられません。先に git add と git commit で記録しましょう。'],
   [/does not appear to be a git repository/, '送り先（リモート）が登録されていません。git remote add でリモートを登録しましょう。'],
   [/destination path .* already exists/, '同じ名前のフォルダがすでにあります。別の名前を指定するか、いまあるフォルダを使いましょう。'],
+  [/Permission denied/, '権限がないため実行できません。ls -l で権限（rwx）を確認しましょう。r=読む・w=書く・x=実行で、chmod で変えられます。'],
+  [/invalid mode/, '権限の指定が正しくありません。数字なら 755 や 644、記号なら u+x や a-w のように書きます。'],
   [/not supported in this practice terminal/, 'この練習用ターミナルでは、まだ使えないコマンドです。'],
 ]
 
@@ -121,6 +154,30 @@ type Env = {
   err: (t: string) => void
 }
 
+// chmod の権限の指定を、新しい権限（0〜0o777）にする。数字（755）と記号（u+x / a-w / go=r / +x / u=rw,go=r）に対応。書き方が違えば null
+function parseMode(spec: string, cur: number): number | null {
+  if (/^[0-7]{1,4}$/.test(spec)) return parseInt(spec.slice(-3), 8)
+  let mode = cur
+  for (const clause of spec.split(',')) {
+    const m = clause.match(/^([ugoa]*)([-+=])([rwx]*)$/)
+    if (!m) return null
+    const [, who, op, perm] = m
+    const p = (perm.includes('r') ? 4 : 0) | (perm.includes('w') ? 2 : 0) | (perm.includes('x') ? 1 : 0)
+    const shifts = who === '' || who.includes('a') ? [6, 3, 0] : [...new Set(who)].map((w) => ({ u: 6, g: 3, o: 0 })[w as 'u' | 'g' | 'o'])
+    const umask = who === '' ? 0o022 : 0 // 誰も指定しないときは、umask 022 の分（グループ・その他の書き込み）は変えない
+    let bits = 0
+    let area = 0
+    for (const sh of shifts) {
+      bits |= p << sh
+      area |= 7 << sh
+    }
+    bits &= ~umask
+    area &= ~umask
+    mode = op === '+' ? mode | bits : op === '-' ? mode & ~bits : (mode & ~area) | bits
+  }
+  return mode & 0o777
+}
+
 const commands: Record<string, (e: Env) => void> = {
   pwd: (e) => e.say(e.cwd),
 
@@ -132,6 +189,7 @@ const commands: Record<string, (e: Env) => void> = {
     if (!target) return e.err('bash: syntax error near unexpected token `newline\'')
     const t = e.R(target)
     if (isDir(e.fs, t)) return e.err(`bash: ${target}: Is a directory`)
+    if (isFile(e.fs, t) && !can(e.fs, t, 2)) return e.err(`bash: ${target}: Permission denied`)
     if (!isDir(e.fs, parentOf(t))) return e.err(`bash: ${target}: No such file or directory`)
     let old = append && isFile(e.fs, t) ? (e.fs[t] as string) : ''
     if (old && !old.endsWith('\n')) old += '\n'
@@ -168,6 +226,7 @@ const commands: Record<string, (e: Env) => void> = {
     const t = e.R(fileArg ?? '');
     if (!fileArg || !exists(e.fs, t)) return e.err(`head: cannot open '${fileArg}': No such file or directory`);
     if (isDir(e.fs, t)) return e.err(`head: error reading '${fileArg}': Is a directory`);
+    if (!can(e.fs, t, 4)) return e.err(`head: cannot open '${fileArg}' for reading: Permission denied`);
     const lines = linesOf(e.fs[t] as string);
     lines.slice(0, n).forEach(l => e.say(l));
   },
@@ -186,6 +245,7 @@ const commands: Record<string, (e: Env) => void> = {
     const t = e.R(fileArg ?? '');
     if (!fileArg || !exists(e.fs, t)) return e.err(`tail: cannot open '${fileArg}': No such file or directory`);
     if (isDir(e.fs, t)) return e.err(`tail: error reading '${fileArg}': Is a directory`);
+    if (!can(e.fs, t, 4)) return e.err(`tail: cannot open '${fileArg}' for reading: Permission denied`);
     const lines = linesOf(e.fs[t] as string);
     lines.slice(-n).forEach(l => e.say(l));
   },
@@ -207,6 +267,7 @@ const commands: Record<string, (e: Env) => void> = {
     const t = e.R(e.args[1]);
     if (!exists(e.fs, t)) return e.err(`grep: ${e.args[1]}: No such file or directory`);
     if (isDir(e.fs, t)) return e.err(`grep: ${e.args[1]}: Is a directory`);
+    if (!can(e.fs, t, 4)) return e.err(`grep: ${e.args[1]}: Permission denied`);
     linesOf(e.fs[t] as string).forEach((line, i) => {
       if (regex.test(line)) e.say(e.flags.includes('n') ? `${i + 1}:${line}` : line);
     });
@@ -221,6 +282,7 @@ const commands: Record<string, (e: Env) => void> = {
       const t = e.R(fileArg);
       if (!exists(e.fs, t)) return e.err(`wc: ${fileArg}: No such file or directory`);
       if (isDir(e.fs, t)) return e.err(`wc: ${fileArg}: Is a directory`);
+      if (!can(e.fs, t, 4)) return e.err(`wc: ${fileArg}: Permission denied`);
       const count = linesOf(e.fs[t] as string).length;
       e.say(count.toString());
     } else {
@@ -234,15 +296,21 @@ const commands: Record<string, (e: Env) => void> = {
     const arg = e.args[0]
     const t = e.R(arg ?? '.')
     if (!exists(e.fs, t)) return e.err(`ls: cannot access '${arg}': No such file or directory`)
-    if (isFile(e.fs, t)) return e.say(baseOf(t))
+    const long = e.flags.includes('l')
+    // ls -l の1行（権限は chmod で変えた値）。日付は固定
+    const line = (name: string, full: string, dir: boolean) => {
+      const size = dir ? 4096 : (e.fs[full] as string).length
+      return `${modeString(getMode(e.fs, full), dir)} 1 student student ${String(size).padStart(4)} Nov  5 10:00 ${name}`
+    }
+    if (isFile(e.fs, t)) return e.say(long ? line(arg ?? baseOf(t), t, false) : baseOf(t))
+    if (!can(e.fs, t, 4)) return e.err(`ls: cannot open directory '${arg ?? '.'}': Permission denied`)
     let names = childrenOf(e.fs, t)
     names = e.flags.includes('a') ? ['.', '..', ...names] : names.filter((n) => !n.startsWith('.'))
-    if (e.flags.includes('l')) {
+    if (long) {
       e.say(`total ${names.length * 4}`)
       for (const n of names) {
-        const dir = n === '.' || n === '..' || isDir(e.fs, `${t}/${n}`)
-        const size = dir ? 4096 : (e.fs[`${t}/${n}`] as string).length
-        e.say(`${dir ? 'drwxr-xr-x' : '-rw-r--r--'} 1 student student ${String(size).padStart(4)} Nov  5 10:00 ${n}`)
+        const full = n === '.' ? t : n === '..' ? parentOf(t) : `${t === '/' ? '' : t}/${n}`
+        e.say(line(n, full, isDir(e.fs, full)))
       }
     } else if (names.length) {
       if (e.piped) names.forEach((name) => e.say(name))
@@ -255,6 +323,7 @@ const commands: Record<string, (e: Env) => void> = {
     const t = arg ? e.R(arg) : HOME
     if (!exists(e.fs, t)) e.err(`bash: cd: ${arg}: No such file or directory`)
     else if (isFile(e.fs, t)) e.err(`bash: cd: ${arg}: Not a directory`)
+    else if (!can(e.fs, t, 1)) e.err(`bash: cd: ${arg}: Permission denied`)
     else e.cwd = t
   },
 
@@ -264,6 +333,7 @@ const commands: Record<string, (e: Env) => void> = {
       const t = e.R(a)
       if (!exists(e.fs, t)) e.err(`cat: ${a}: No such file or directory`)
       else if (isDir(e.fs, t)) e.err(`cat: ${a}: Is a directory`)
+      else if (!can(e.fs, t, 4)) e.err(`cat: ${a}: Permission denied`)
       else (e.fs[t] as string).replace(/\n$/, '').split('\n').forEach((l) => e.say(l))
     }
   },
@@ -299,7 +369,33 @@ const commands: Record<string, (e: Env) => void> = {
       if (!exists(e.fs, t)) e.err(`rm: cannot remove '${a}': No such file or directory`)
       else if (isDir(e.fs, t) && !e.flags.includes('r')) e.err(`rm: cannot remove '${a}': Is a directory`)
       else if (t === '/' || t === HOME || e.cwd.startsWith(t + '/') || e.cwd === t) e.err(`rm: refusing to remove '${a}'`)
-      else e.fs = Object.fromEntries(Object.entries(e.fs).filter(([k]) => k !== t && !k.startsWith(t + '/')))
+      else e.fs = dropModes(Object.fromEntries(Object.entries(e.fs).filter(([k]) => k !== t && !k.startsWith(t + '/'))), t)
+    }
+  },
+
+  chmod(e) {
+    // -R（フォルダの中も）だけがオプション。-w や -x は「権限の指定」として扱う（本物と同じ）
+    let recursive = false
+    const words: string[] = []
+    for (const a of e.rest) {
+      if (a === '-R' || a === '--recursive') recursive = true
+      else if (!/^-[cfv]+$/.test(a)) words.push(a)
+    }
+    const [spec, ...targets] = words
+    if (!spec) return e.err('chmod: missing operand')
+    if (!targets.length) return e.err(`chmod: missing operand after ‘${spec}’`)
+    if (parseMode(spec, 0o644) === null) return e.err(`chmod: invalid mode: ‘${spec}’`)
+    for (const a of targets) {
+      const t = e.R(a)
+      if (!exists(e.fs, t)) {
+        e.err(`chmod: cannot access '${a}': No such file or directory`)
+        continue
+      }
+      const paths = recursive ? Object.keys(e.fs).filter((k) => k !== MODES_FILE && (k === t || k.startsWith(t + '/'))) : [t]
+      const before = e.fs
+      e.fs = withModes(before, (m) => {
+        for (const p of paths) m[p] = (parseMode(spec, getMode(before, p)) ?? 0).toString(8).padStart(3, '0')
+      })
     }
   },
 
@@ -315,6 +411,7 @@ function copyMove(e: Env, name: 'cp' | 'mv') {
   let dst = e.R(e.args[1])
   if (!exists(e.fs, src)) return e.err(`${name}: cannot stat '${e.args[0]}': No such file or directory`)
   if (name === 'cp' && isDir(e.fs, src) && !e.flags.includes('r')) return e.err(`cp: -r not specified; omitting directory '${e.args[0]}'`)
+  if (name === 'cp' && isFile(e.fs, src) && !can(e.fs, src, 4)) return e.err(`cp: cannot open '${e.args[0]}' for reading: Permission denied`)
   if (isDir(e.fs, dst)) dst = `${dst}/${baseOf(src)}`
   if (dst === src) return e.err(`${name}: '${e.args[0]}' and '${e.args[1]}' are the same file`)
   if (dst.startsWith(src + '/')) return e.err(`${name}: cannot ${name === 'cp' ? 'copy' : 'move'} '${e.args[0]}' to a subdirectory of itself, '${e.args[1]}'`)
@@ -326,7 +423,20 @@ function copyMove(e: Env, name: 'cp' | 'mv') {
       if (name === 'mv') delete next[k]
     }
   }
-  e.fs = next
+  // 権限もついていく（cp で上書きする相手は、もとの権限のまま）
+  const old = readModes(e.fs)
+  const before = e.fs
+  e.fs = withModes(next, (m) => {
+    for (const k of Object.keys(before)) {
+      if (k !== src && !k.startsWith(src + '/')) continue
+      const d = dst + k.slice(src.length)
+      if (!(name === 'cp' && d in before)) {
+        if (old[k] !== undefined) m[d] = old[k]
+        else delete m[d]
+      }
+      if (name === 'mv') delete m[k]
+    }
+  })
 }
 
 /* ---------- git（疑似） ----------
@@ -1000,7 +1110,7 @@ export function complete(state: TermState, input: string): { value: string; cand
   // 最後の | より後ろだけを見る（cat a | gr → コマンド名の位置）
   const seg = head.slice(head.lastIndexOf('|') + 1).trim()
   const words = seg === '' ? [] : seg.split(/\s+/) // 補完する単語より前の単語
-  const isCommand = words.length === 0
+  const isCommand = words.length === 0 && !/^(\.{0,2}\/|~\/)/.test(word) // ./run.sh のようにパスで始めるときは、コマンド名ではなくファイル名の補完
 
   let base: string // 補完結果の先頭に残す部分
   let names: string[] // 候補（フォルダは末尾に / 付き）
@@ -1059,12 +1169,39 @@ export function tokenize(input: string): string[] {
 
 export type Result = { state: TermState; out: Line[]; clear?: boolean; error?: boolean }
 
-function execSingle(state: TermState, tokens: string[], stdin?: string[], piped = false): Result {
+// ./run.sh のようにパスで指定したファイルを実行する。実行権限（x）が必要。中の各行を、順にコマンドとして実行する
+const SCRIPT_DEPTH_MAX = 5
+function runScript(state: TermState, cmd: string, depth: number): Result {
+  const bad = (text: string): Result => {
+    const why = EXPLAIN.find(([re]) => re.test(text))
+    return { state, out: [{ kind: 'err', text }, ...(why ? [{ kind: 'note' as const, text: `💡 ${why[1]}` }] : [])], error: true }
+  }
+  const t = resolve(state.cwd, cmd)
+  if (!exists(state.fs, t)) return bad(`bash: ${cmd}: No such file or directory`)
+  if (isDir(state.fs, t)) return bad(`bash: ${cmd}: Is a directory`)
+  if (!can(state.fs, t, 1) || !can(state.fs, t, 4)) return bad(`bash: ${cmd}: Permission denied`)
+  if (depth >= SCRIPT_DEPTH_MAX) return bad(`bash: ${cmd}: too many nested scripts`)
+  const out: Line[] = []
+  let error = false
+  let cur: TermState = state
+  for (const raw of linesOf(state.fs[t] as string)) {
+    const line = raw.trim()
+    if (!line || line.startsWith('#')) continue // 空行と、コメント（#!/bin/bash も）は飛ばす
+    const r = exec(cur, line, depth + 1)
+    cur = r.state
+    out.push(...r.out)
+    if (r.error) error = true
+  }
+  return { state: { fs: cur.fs, cwd: state.cwd }, out, error } // 本物と同じく、cd はスクリプトの外には残らない
+}
+
+function execSingle(state: TermState, tokens: string[], stdin?: string[], piped = false, depth = 0): Result {
   const out: Line[] = []
   let error = false
   const [cmd, ...rest] = tokens
   if (!cmd) return { state, out }
   if (cmd === 'clear') return { state, out, clear: true }
+  if (/^(\.{1,2}\/|\/|~\/)/.test(cmd)) return runScript(state, cmd, depth)
 
   const env: Env = {
     fs: state.fs,
@@ -1094,18 +1231,18 @@ function execSingle(state: TermState, tokens: string[], stdin?: string[], piped 
   return { state: { fs: env.fs, cwd: env.cwd }, out, error }
 }
 
-export function exec(state: TermState, input: string): Result {
+export function exec(state: TermState, input: string, depth = 0): Result {
   const tokens = tokenize(input)
   const pipeAt = tokens.indexOf('|')
-  if (pipeAt < 0) return execSingle(state, tokens)
+  if (pipeAt < 0) return execSingle(state, tokens, undefined, false, depth)
 
-  let current = execSingle(state, tokens.slice(0, pipeAt), undefined, true)
+  let current = execSingle(state, tokens.slice(0, pipeAt), undefined, true, depth)
   let inputLines = current.out.filter((line) => line.kind === 'out').map((line) => line.text)
   let next = pipeAt + 1
   while (next < tokens.length) {
     const nextPipe = tokens.indexOf('|', next)
     const end = nextPipe < 0 ? tokens.length : nextPipe
-    const result = execSingle(current.state, tokens.slice(next, end), inputLines, true)
+    const result = execSingle(current.state, tokens.slice(next, end), inputLines, true, depth)
     current = {
       state: result.state,
       out: [...current.out.filter((line) => line.kind !== 'out'), ...result.out],

@@ -1,6 +1,6 @@
 // クリア条件（DBの JSON）を判定する。レッスンのステップ・実技テスト・エラー修復・シナリオで共通。
 // パスは「ホームからの相対パス」で書く（~/xxx や /絶対パスも可）。書かれた条件は すべて満たしたとき成功。
-import { Fs, HOME, isDir, isFile, exists, gitSnapshot } from './terminal'
+import { Fs, HOME, isDir, isFile, exists, getMode, gitSnapshot } from './terminal'
 
 export type Cond = {
   label?: string // 不合格のとき「不足している点」として表示する文
@@ -8,6 +8,8 @@ export type Cond = {
   dirs?: string[] // これらのフォルダがあること
   files?: string[] // これらのファイルがあること
   absent?: string[] // これらが存在しないこと
+  modes?: Record<string, string> // 権限がこの8進数どおりであること（例: { "run.sh": "755" }）
+  userPerms?: Record<string, string> // 所有者（左の3文字）にこの権限があること。r・w・x の組み合わせ（例: { "run.sh": "x" }）
   commands?: string[] // 入力したコマンド履歴の中に、この正規表現に合うものがあること
   git?: GitCond // Git の状態（コミットできたか、ブランチ、リモートなど）
   tab?: { completed?: boolean; listed?: boolean } // commands に合う入力のとき Tab 補完を使っていたこと（completed=補完した / listed=候補一覧を出した）。commands と一緒に書く
@@ -28,7 +30,7 @@ export type GitCond = {
   pushed?: boolean // 最新コミットがリモートに送られている
   branchFiles?: Record<string, string[]> // 指定したブランチの最新コミットに、これらのファイルが入っている
 }
-export type FsSpec = { dirs?: string[]; files?: Record<string, string> }
+export type FsSpec = { dirs?: string[]; files?: Record<string, string>; modes?: Record<string, string> } // modes … 最初の権限（例: { "secret.txt": "000" }）
 export type Ctx = { fs: Fs; cwd: string; log: string[]; tabLog?: TabUse[] } // tabLog … log と同じ順番で、各入力で Tab を使ったか（レッスン画面だけが渡す）
 
 export const toAbs = (p: string) => (p === '~' ? HOME : p.startsWith('~/') ? HOME + p.slice(1) : p.startsWith('/') ? p : `${HOME}/${p}`)
@@ -69,6 +71,8 @@ export function passes(c: Cond, x: Ctx): boolean {
     (c.dirs ?? []).every((p) => isDir(x.fs, toAbs(p))) &&
     (c.files ?? []).every((p) => isFile(x.fs, toAbs(p))) &&
     (c.absent ?? []).every((p) => !exists(x.fs, toAbs(p))) &&
+    Object.entries(c.modes ?? {}).every(([p, o]) => exists(x.fs, toAbs(p)) && getMode(x.fs, toAbs(p)) === parseInt(o, 8)) &&
+    Object.entries(c.userPerms ?? {}).every(([p, perms]) => exists(x.fs, toAbs(p)) && [...perms].every((ch) => ((getMode(x.fs, toAbs(p)) >> 6) & ({ r: 4, w: 2, x: 1 } as Record<string, number>)[ch]) !== 0)) &&
     (c.commands ?? []).every((re) => x.log.some((l) => new RegExp(re).test(l.trim())))
   )
 }
