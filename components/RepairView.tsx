@@ -7,6 +7,7 @@ import { allPass, toAbs } from '@/lib/condition'
 import { makeFs, shortPath } from '@/lib/terminal'
 import type { RepairRow } from '@/lib/types'
 import Terminal, { useTerminal } from './Terminal'
+import SaveError from './SaveError'
 import FileTree from './FileTree'
 
 export default function RepairView({ mission }: { mission: RepairRow }) {
@@ -19,10 +20,11 @@ export default function RepairView({ mission }: { mission: RepairRow }) {
 
   // 修復できたら結果をDBに保存（1回だけ）
   const saved = useRef(false)
+  const [saveError, setSaveError] = useState(false)
   useEffect(() => {
     if (done && !saved.current) {
       saved.current = true
-      saveAttempt(mission.id, 'repair', true).catch(() => (saved.current = false))
+      saveAttempt(mission.id, 'repair', true).then(() => setSaveError(false), () => setSaveError(true))
     }
   }, [done, mission.id])
 
@@ -49,6 +51,8 @@ export default function RepairView({ mission }: { mission: RepairRow }) {
       </div>
 
       {done && <p className="rounded-lg border-2 border-green-600 bg-green-50 p-3 text-xl font-bold text-green-700">修復成功！</p>}
+
+      {saveError && <SaveError message="結果を保存できませんでした。" onRetry={() => saveAttempt(mission.id, 'repair', true).then(() => setSaveError(false), () => setSaveError(true))} />}
 
       <div className="flex flex-wrap gap-3">
         <button className="btn btn-sub" onClick={() => { term.reset(); setHints(0) }}>リセット</button>

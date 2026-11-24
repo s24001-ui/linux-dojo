@@ -7,6 +7,7 @@ import { passes, toAbs } from '@/lib/condition'
 import { makeFs } from '@/lib/terminal'
 import type { LessonRow, StepRow } from '@/lib/types'
 import Terminal, { useTerminal } from './Terminal'
+import SaveError from './SaveError'
 import FileTree from './FileTree'
 
 export default function LessonView({ lesson, steps }: { lesson: Pick<LessonRow, 'code' | 'title'>; steps: StepRow[] }) {
@@ -23,10 +24,11 @@ export default function LessonView({ lesson, steps }: { lesson: Pick<LessonRow, 
 
   // 全ステップをクリアしたときだけ、進捗をDBに登録（1回だけ）
   const saved = useRef(false)
+  const [saveError, setSaveError] = useState(false)
   useEffect(() => {
     if (cleared && last && !saved.current) {
       saved.current = true
-      completeLesson(lesson.code).catch(() => (saved.current = false))
+      completeLesson(lesson.code).then(() => setSaveError(false), () => setSaveError(true))
     }
   }, [cleared, last, lesson.code])
 
@@ -67,6 +69,8 @@ export default function LessonView({ lesson, steps }: { lesson: Pick<LessonRow, 
           {last ? <Link href={`/lessons/${lesson.code}/quiz`} className="btn">確認テストへ進む</Link> : <button className="btn" onClick={next}>次のステップへ</button>}
         </div>
       )}
+
+      {saveError && <SaveError message="レッスンの進捗を保存できませんでした。" onRetry={() => completeLesson(lesson.code).then(() => setSaveError(false), () => setSaveError(true))} />}
 
       <Link href="/" className="btn btn-sub">← トップへ戻る</Link>
     </div>

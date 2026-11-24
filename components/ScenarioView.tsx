@@ -7,6 +7,7 @@ import { allPass, passes, toAbs } from '@/lib/condition'
 import { makeFs } from '@/lib/terminal'
 import type { ScenarioRow } from '@/lib/types'
 import Terminal, { useTerminal } from './Terminal'
+import SaveError from './SaveError'
 import FileTree from './FileTree'
 
 export default function ScenarioView({ scenario }: { scenario: ScenarioRow }) {
@@ -18,10 +19,11 @@ export default function ScenarioView({ scenario }: { scenario: ScenarioRow }) {
 
   // クリアしたら結果をDBに保存（1回だけ）
   const saved = useRef(false)
+  const [saveError, setSaveError] = useState(false)
   useEffect(() => {
     if (done && !saved.current) {
       saved.current = true
-      saveAttempt(scenario.id, 'scenario', true).catch(() => (saved.current = false))
+      saveAttempt(scenario.id, 'scenario', true).then(() => setSaveError(false), () => setSaveError(true))
     }
   }, [done, scenario.id])
 
@@ -53,6 +55,8 @@ export default function ScenarioView({ scenario }: { scenario: ScenarioRow }) {
       </div>
 
       {done && <p className="rounded-lg border-2 border-green-600 bg-green-50 p-3 text-xl font-bold text-green-700">シナリオクリア！</p>}
+
+      {saveError && <SaveError message="結果を保存できませんでした。" onRetry={() => saveAttempt(scenario.id, 'scenario', true).then(() => setSaveError(false), () => setSaveError(true))} />}
 
       <div className="flex flex-wrap gap-3">
         <button className="btn btn-sub" onClick={() => { term.reset(); setHints(s.goals.map(() => 0)) }}>リセット</button>

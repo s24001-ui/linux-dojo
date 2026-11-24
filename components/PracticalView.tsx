@@ -7,18 +7,20 @@ import { failedLabels, toAbs } from '@/lib/condition'
 import { makeFs } from '@/lib/terminal'
 import type { PracticalRow } from '@/lib/types'
 import Terminal, { useTerminal } from './Terminal'
+import SaveError from './SaveError'
 import FileTree from './FileTree'
 
 export default function PracticalView({ test }: { test: PracticalRow }) {
   const s = test.setup
   const term = useTerminal(makeFs(s.fs), s.cwd ? toAbs(s.cwd) : undefined)
   const [missing, setMissing] = useState<string[] | null>(null) // null=未判定
+  const [saveError, setSaveError] = useState(false)
 
   // 途中経過ではなく、最終状態だけで判定する（ヒントは出さない）
   const judge = () => {
     const m = failedLabels(s.checks, { fs: term.fs, cwd: term.cwd, log: term.log })
     setMissing(m)
-    saveAttempt(test.id, 'practical', m.length === 0).catch(() => {})
+    saveAttempt(test.id, 'practical', m.length === 0).then(() => setSaveError(false), () => setSaveError(true))
   }
 
   return (
@@ -44,6 +46,8 @@ export default function PracticalView({ test }: { test: PracticalRow }) {
           <ul className="mt-1 list-disc pl-5 text-sm">{missing.map((m) => <li key={m}>{m}</li>)}</ul>
         </div>
       ))}
+
+      {saveError && <SaveError message="結果を保存できませんでした。もう一度「判定する」を押すと再保存されます。" />}
 
       <Link href="/" className="btn btn-sub">← トップへ戻る</Link>
     </div>

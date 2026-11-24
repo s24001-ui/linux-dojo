@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { recordQuizAnswer, saveQuizResult } from '@/app/actions'
 import { QUIZ_SIZE } from '@/lib/quiz'
 import type { LessonRow, QuizRow } from '@/lib/types'
+import SaveError from './SaveError'
 
 // レッスンごとの確認テスト（QUIZ_SIZE 問）を、登録順（id順）に毎回すべて出題する
 export default function QuizView(props: { lesson: Pick<LessonRow, 'code' | 'title'>; questions: QuizRow[] }) {
@@ -32,6 +33,7 @@ function QuizBody({ lesson, questions, onFinish }: { lesson: Pick<LessonRow, 'co
   const [picked, setPicked] = useState<number | null>(null)
   const [results, setResults] = useState<Record<number, boolean>>({}) // 問題ID → 正解したか
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<'answer' | 'result' | null>(null) // 保存に失敗したとき、画面で知らせる
 
   if (!qs.length) return <p>このレッスンの問題がまだ登録されていません。</p>
   const q = qs[no]
@@ -42,7 +44,25 @@ function QuizBody({ lesson, questions, onFinish }: { lesson: Pick<LessonRow, 'co
     if (picked !== null) return // 回答後は変更できない
     setPicked(i)
     setResults((r) => ({ ...r, [q.id]: i === q.correct_index }))
-    recordQuizAnswer(q.id, i).catch(() => {}) // 1問ずつ回答履歴に保存（失敗しても学習は続けられる）
+    recordQuizAnswer(q.id, i).catch(() => setSaveError((e) => e ?? 'answer')) // 1問ずつ回答履歴に保存（失敗しても学習は続けられるが、画面で知らせる）
+  }
+  // 結果を保存して結果画面へ。保存に失敗したら画面に残して、再試行か「保存せずに進む」を選べるようにする
+  const finish = async (skipSave = false) => {
+    setSaving(true)
+    const score = qs.filter((x) => results[x.id]).length
+    if (!skipSave) {
+      try {
+        await saveQuizResult(lesson.code, score, qs.length)
+        setSaveError((e) => (e === 'result' ? null : e))
+      } catch {
+        setSaveError('result')
+        setSaving(false)
+        return
+      }
+    }
+    const r = qs.map((x) => `${x.id}:${results[x.id] ? 1 : 0}`).join(',')
+    onFinish() // 結果画面へ移動したあと、この画面が隠れたら作り直す
+    router.push(`/lessons/${lesson.code}/result?r=${r}`)
   }
   const next = async () => {
     if (!last) {
@@ -50,12 +70,7 @@ function QuizBody({ lesson, questions, onFinish }: { lesson: Pick<LessonRow, 'co
       setPicked(null)
       return
     }
-    setSaving(true)
-    const score = qs.filter((x) => results[x.id]).length
-    await saveQuizResult(lesson.code, score, qs.length).catch(() => {})
-    const r = qs.map((x) => `${x.id}:${results[x.id] ? 1 : 0}`).join(',')
-    onFinish() // 結果画面へ移動したあと、この画面が隠れたら作り直す
-    router.push(`/lessons/${lesson.code}/result?r=${r}`)
+    await finish()
   }
 
   return (
@@ -78,6 +93,13 @@ function QuizBody({ lesson, questions, onFinish }: { lesson: Pick<LessonRow, 'co
           <p className={`text-xl font-bold ${picked === q.correct_index ? 'text-green-700' : 'text-red-700'}`}>{picked === q.correct_index ? '正解' : '不正解'}</p>
           {q.explanation && <p className="card bg-[#f6f6f6]">{q.explanation}</p>}
           <button className="btn" onClick={next} disabled={saving}>{last ? '結果を見る' : '次の問題へ'}</button>
+          {saveError === 'answer' && <SaveError message="回答の一部を記録できませんでした（学習は続けられます）。" />}
+          {saveError === 'result' && (
+            <div className="space-y-2">
+              <SaveError message="テスト結果を保存できませんでした。もう一度「結果を見る」を押してください。" />
+              <button className="btn btn-sub !py-1.5 text-sm" onClick={() => finish(true)} disabled={saving}>保存せずに結果を見る</button>
+            </div>
+          )}
         </div>
       )}
     </div>
