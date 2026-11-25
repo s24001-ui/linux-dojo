@@ -9,3 +9,7 @@ type Base = { id: number; command_tag: string; title: string; body: string }
 export type PracticalRow = Base & { lessonCode: string; setup: { fs: FsSpec; cwd?: string; checks: Cond[] } }
 export type RepairRow = Base & { cleared: boolean; setup: { fs: FsSpec; cwd?: string; error: { cmd: string; msg: string }; hints: string[]; checks: Cond[] } }
 export type ScenarioRow = Base & { cleared: boolean; setup: { summary: string; commands: string; fs: FsSpec; cwd?: string; goals: (Cond & { label: string; hints: string[] })[]; checks: Cond[] } }
+export type RepairListRow = Pick<RepairRow, 'id' | 'command_tag' | 'title' | 'body' | 'cleared'>
+export type ScenarioListRow = Pick<ScenarioRow, 'id' | 'command_tag' | 'title' | 'body' | 'cleared'> & {
+  setup: Pick<ScenarioRow['setup'], 'summary' | 'commands'>
+}

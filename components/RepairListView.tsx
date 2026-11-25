@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import type { RepairRow } from '@/lib/types'
+import type { RepairListRow } from '@/lib/types'
 
-export default function RepairListView({ missions }: { missions: RepairRow[] }) {
+export default function RepairListView({ missions }: { missions: RepairListRow[] }) {
   const [query, setQuery] = useState('')
   const clearedCount = missions.filter((mission) => mission.cleared).length
   const commands = [...new Set(missions.map((mission) => mission.command_tag))]

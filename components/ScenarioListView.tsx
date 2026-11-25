@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import type { ScenarioRow } from '@/lib/types'
+import type { ScenarioListRow } from '@/lib/types'
 
-export default function ScenarioListView({ scenarios }: { scenarios: ScenarioRow[] }) {
+export default function ScenarioListView({ scenarios }: { scenarios: ScenarioListRow[] }) {
   const [query, setQuery] = useState('')
   const clearedCount = scenarios.filter((scenario) => scenario.cleared).length
   const commands = [...new Set(scenarios.flatMap((scenario) => scenario.setup.commands.split('/').map((command) => command.trim()).filter(Boolean)))]

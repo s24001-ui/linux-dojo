@@ -17,13 +17,14 @@ export async function proxy(request: NextRequest) {
     },
   })
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data, error } = await supabase.auth.getClaims()
+  const isAuthenticated = !error && Boolean(data?.claims.sub)
   const { pathname } = request.nextUrl
 
-  if (!user && !pathname.startsWith('/auth/')) {
+  if (!isAuthenticated && !pathname.startsWith('/auth/')) {
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
-  if (user && pathname === '/auth/login') {
+  if (isAuthenticated && pathname === '/auth/login') {
     return NextResponse.redirect(new URL('/', request.url))
   }
   return response

@@ -2,7 +2,7 @@
 import { connection } from 'next/server'
 import { cache } from 'react'
 import { createClient } from './supabase-server'
-import type { LessonRow, PracticalRow, QuizRow, RepairRow, ScenarioRow, StepRow } from './types'
+import type { LessonRow, PracticalRow, QuizRow, RepairListRow, RepairRow, ScenarioListRow, ScenarioRow, StepRow } from './types'
 
 // ログイン中のユーザー個別のデータを読むので、毎回リクエストのたびに実行する。
 // Supabase の認証は、ログインの有効期限の確認に Date.now() を使う。これを事前描画に含めないため、
@@ -39,9 +39,14 @@ export async function getProgress() {
 
 export async function getLesson(code: string): Promise<{ lesson: LessonRow; steps: StepRow[] } | null> {
   const sb = await client()
-  const { data: lesson } = await sb.from('lessons').select('id, code, title, sort_order, category').eq('code', code).maybeSingle()
-  if (!lesson) return null
-  const { data: steps } = await sb.from('lesson_steps').select('step_number, body, hint, clear_condition, setup_data').eq('lesson_id', lesson.id).order('step_number')
+  const { data } = await sb
+    .from('lessons')
+    .select('id, code, title, sort_order, category, lesson_steps(step_number, body, hint, clear_condition, setup_data)')
+    .eq('code', code)
+    .order('step_number', { referencedTable: 'lesson_steps' })
+    .maybeSingle()
+  if (!data) return null
+  const { lesson_steps: steps, ...lesson } = data
   return { lesson, steps: steps ?? [] }
 }
 
@@ -86,18 +91,58 @@ async function getById(id: number, type: 'repair' | 'scenario') {
   return { id: q.id, command_tag: q.command_tag, title: q.title ?? '', body: q.body, cleared: done.has(q.id), setup: q.setup_data }
 }
 
-async function listByType(type: 'repair' | 'scenario', orderByLesson = false) {
+export async function getRepairs(): Promise<RepairListRow[]> {
   const sb = await client()
-  const { data } = await sb.from('questions').select(`id, command_tag, title, body, setup_data${orderByLesson ? ', lessons(sort_order)' : ''}`).eq('question_type', type).order('id')
-  const rows = (data ?? []) as unknown as Q[]
-  if (orderByLesson) {
-    rows.sort((a, b) => (a.lessons?.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.lessons?.sort_order ?? Number.MAX_SAFE_INTEGER) || a.id - b.id)
-  }
-  const done = await correctIds(rows.map((r) => r.id))
-  return rows.map((q) => ({ id: q.id, command_tag: q.command_tag, title: q.title ?? '', body: q.body, cleared: done.has(q.id), setup: q.setup_data }))
+  const { data } = await sb
+    .from('questions')
+    .select('id, command_tag, title, body, lessons(sort_order), answer_logs!left(is_correct)')
+    .eq('question_type', 'repair')
+    .eq('answer_logs.is_correct', true)
+    .order('id')
+  const rows = (data ?? []) as unknown as {
+    id: number
+    command_tag: string
+    title: string | null
+    body: string
+    lessons: { sort_order?: number } | null
+    answer_logs?: { is_correct: boolean }[] | null
+  }[]
+  rows.sort((a, b) => (a.lessons?.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.lessons?.sort_order ?? Number.MAX_SAFE_INTEGER) || a.id - b.id)
+  return rows.map((q) => ({
+    id: q.id,
+    command_tag: q.command_tag,
+    title: q.title ?? '',
+    body: q.body,
+    cleared: Boolean(q.answer_logs?.length),
+  }))
 }
-export const getRepairs = () => listByType('repair', true) as unknown as Promise<RepairRow[]>
-export const getScenarios = () => listByType('scenario') as unknown as Promise<ScenarioRow[]>
+
+export async function getScenarios(): Promise<ScenarioListRow[]> {
+  const sb = await client()
+  const { data } = await sb
+    .from('questions')
+    .select('id, command_tag, title, body, summary:setup_data->>summary, commands:setup_data->>commands, answer_logs!left(is_correct)')
+    .eq('question_type', 'scenario')
+    .eq('answer_logs.is_correct', true)
+    .order('id')
+  const rows = (data ?? []) as unknown as {
+    id: number
+    command_tag: string
+    title: string | null
+    body: string
+    summary: string
+    commands: string
+    answer_logs?: { is_correct: boolean }[] | null
+  }[]
+  return rows.map((q) => ({
+    id: q.id,
+    command_tag: q.command_tag,
+    title: q.title ?? '',
+    body: q.body,
+    cleared: Boolean(q.answer_logs?.length),
+    setup: { summary: q.summary, commands: q.commands },
+  }))
+}
 
 export async function getRepair(id: number): Promise<RepairRow | null> {
   return await getById(id, 'repair') as RepairRow | null
