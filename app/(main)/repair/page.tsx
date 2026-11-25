@@ -5,7 +5,7 @@ import { getRepairs } from '@/lib/db'
 // S-06 エラー修復一覧画面
 export default function RepairListPage() {
   return (
-    <Suspense fallback={<p>読み込み中…</p>}>
+    <Suspense fallback={null}>
       <RepairList />
     </Suspense>
   )

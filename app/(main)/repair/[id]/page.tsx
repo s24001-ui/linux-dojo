@@ -6,7 +6,7 @@ import { getRepair } from '@/lib/db'
 // S-07 エラー修復画面
 export default function RepairPage({ params }: PageProps<'/repair/[id]'>) {
   return (
-    <Suspense fallback={<p>読み込み中…</p>}>
+    <Suspense fallback={null}>
       <Repair params={params} />
     </Suspense>
   )

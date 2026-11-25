@@ -6,7 +6,7 @@ import { getLesson, getLessons, getQuestionsByIds } from '@/lib/db'
 // S-05 確認テスト結果画面（?r=問題ID:正誤,問題ID:正誤,…）
 export default function ResultPage(props: PageProps<'/lessons/[id]/result'>) {
   return (
-    <Suspense fallback={<p>結果を読み込み中…</p>}>
+    <Suspense fallback={null}>
       <Result {...props} />
     </Suspense>
   )
@@ -15,11 +15,14 @@ export default function ResultPage(props: PageProps<'/lessons/[id]/result'>) {
 async function Result({ params, searchParams }: PageProps<'/lessons/[id]/result'>) {
   const { id } = await params
   const { r } = await searchParams
-  const data = await getLesson(id)
+  const answers = String(Array.isArray(r) ? r[0] : r ?? '').split(',').map((s) => s.split(':')).filter((p) => /^\d+$/.test(p[0]))
+  const [data, questions, lessons] = await Promise.all([
+    getLesson(id),
+    getQuestionsByIds(answers.map((p) => Number(p[0]))),
+    getLessons(),
+  ])
   if (!data) notFound()
 
-  const answers = String(Array.isArray(r) ? r[0] : r ?? '').split(',').map((s) => s.split(':')).filter((p) => /^\d+$/.test(p[0]))
-  const [questions, lessons] = await Promise.all([getQuestionsByIds(answers.map((p) => Number(p[0]))), getLessons()])
   const items = answers.flatMap((p, i) => {
     const q = questions.find((x) => x.id === Number(p[0]))
     return q ? [{ n: i + 1, q, ok: p[1] === '1' }] : []

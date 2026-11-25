@@ -6,7 +6,7 @@ import { getPractical } from '@/lib/db'
 // S-08 実技テスト画面（URLはレッスンコード）
 export default function TestPage({ params }: PageProps<'/tests/[id]'>) {
   return (
-    <Suspense fallback={<p>読み込み中…</p>}>
+    <Suspense fallback={null}>
       <Test params={params} />
     </Suspense>
   )

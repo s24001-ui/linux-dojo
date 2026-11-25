@@ -1,15 +1,16 @@
 // DBからの読み出し（サーバー専用）。テーブルは supabase/schema.sql を参照。
 import { connection } from 'next/server'
+import { cache } from 'react'
 import { createClient } from './supabase-server'
 import type { LessonRow, PracticalRow, QuizRow, RepairRow, ScenarioRow, StepRow } from './types'
 
 // ログイン中のユーザー個別のデータを読むので、毎回リクエストのたびに実行する。
 // Supabase の認証は、ログインの有効期限の確認に Date.now() を使う。これを事前描画に含めないため、
 // connection() で「ここから先はリクエスト時に実行」と宣言する（Next.js の事前描画エラー対策）。
-async function client() {
+const client = cache(async () => {
   await connection()
   return createClient()
-}
+})
 
 type Q = { id: number; command_tag: string; title: string | null; body: string; setup_data: never; lessons?: { code?: string; sort_order?: number } | null }
 
@@ -74,6 +75,17 @@ async function correctIds(ids: number[]) {
   return new Set((data ?? []).map((r) => r.question_id as number))
 }
 
+async function getById(id: number, type: 'repair' | 'scenario') {
+  const sb = await client()
+  const [result, done] = await Promise.all([
+    sb.from('questions').select('id, command_tag, title, body, setup_data').eq('question_type', type).eq('id', id).maybeSingle(),
+    correctIds([id]),
+  ])
+  const q = result.data as unknown as Q | null
+  if (!q) return null
+  return { id: q.id, command_tag: q.command_tag, title: q.title ?? '', body: q.body, cleared: done.has(q.id), setup: q.setup_data }
+}
+
 async function listByType(type: 'repair' | 'scenario', orderByLesson = false) {
   const sb = await client()
   const { data } = await sb.from('questions').select(`id, command_tag, title, body, setup_data${orderByLesson ? ', lessons(sort_order)' : ''}`).eq('question_type', type).order('id')
@@ -87,11 +99,11 @@ async function listByType(type: 'repair' | 'scenario', orderByLesson = false) {
 export const getRepairs = () => listByType('repair', true) as unknown as Promise<RepairRow[]>
 export const getScenarios = () => listByType('scenario') as unknown as Promise<ScenarioRow[]>
 
-export async function getRepair(id: number) {
-  return (await getRepairs()).find((r) => r.id === id) ?? null
+export async function getRepair(id: number): Promise<RepairRow | null> {
+  return await getById(id, 'repair') as RepairRow | null
 }
-export async function getScenario(id: number) {
-  return (await getScenarios()).find((s) => s.id === id) ?? null
+export async function getScenario(id: number): Promise<ScenarioRow | null> {
+  return await getById(id, 'scenario') as ScenarioRow | null
 }
 
 export async function getMe() {

@@ -6,7 +6,7 @@ import { QUIZ_SIZE } from '@/lib/quiz'
 // S-02 トップページ
 export default function TopPage() {
   return (
-    <Suspense fallback={<p>読み込み中…</p>}>
+    <Suspense fallback={null}>
       <Top />
     </Suspense>
   )
