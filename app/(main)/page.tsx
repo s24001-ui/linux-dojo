@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { getLessons, getProgress } from '@/lib/db'
+import { getLessonOverview } from '@/lib/db'
 import { QUIZ_SIZE } from '@/lib/quiz'
 
 // S-02 トップページ
@@ -13,7 +13,7 @@ export default function TopPage() {
 }
 
 async function Top() {
-  const [lessons, { cleared, best }] = await Promise.all([getLessons(), getProgress()])
+  const { lessons, cleared, best } = await getLessonOverview()
   const scores = Object.values(best)
   const avg = scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null
   const clearedCount = lessons.filter((l) => cleared.has(l.code)).length

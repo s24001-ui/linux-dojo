@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import LogoutButton from '@/components/LogoutButton'
-import { getLessons, getMe, getProgress, getRepairs, getScenarios } from '@/lib/db'
+import { getLessonOverview, getMe, getRepairs, getScenarios } from '@/lib/db'
 import { QUIZ_SIZE } from '@/lib/quiz'
 
 // S-13 マイページ（レベル・XP・バッジは【Want】のため未実装）
@@ -14,7 +14,8 @@ export default function MyPage() {
 }
 
 async function My() {
-  const [me, lessons, { cleared, best }, repairs, scenarios] = await Promise.all([getMe(), getLessons(), getProgress(), getRepairs(), getScenarios()])
+  const [me, overview, repairs, scenarios] = await Promise.all([getMe(), getLessonOverview(), getRepairs(), getScenarios()])
+  const { lessons, cleared, best } = overview
   const scores = Object.values(best)
   const avg = scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null
   const clearedCount = lessons.filter((lesson) => cleared.has(lesson.code)).length

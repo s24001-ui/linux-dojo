@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 
 // S-01 ⑤：認証に失敗・キャンセルしたときに表示するメッセージ
 const LOGIN_ERROR_MESSAGE = 'ログインに失敗しました。もう一度お試しください'
@@ -24,18 +23,22 @@ export default function LoginPage() {
     setLoading(true)
     setErrorMessage('')
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-
-    if (error) {
+    try {
+      const { supabase } = await import('@/lib/supabase')
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+      if (!error) return
       console.error(error) // 詳しい原因は、開発者向けにコンソールへ
-      setErrorMessage(LOGIN_ERROR_MESSAGE)
-      setLoading(false)
+    } catch (error) {
+      console.error(error)
     }
+
+    setErrorMessage(LOGIN_ERROR_MESSAGE)
+    setLoading(false)
   }
 
   return (

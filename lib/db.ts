@@ -21,20 +21,31 @@ export async function getLessons(): Promise<LessonRow[]> {
 }
 
 // 自分のクリア済みレッスン（コード）と、確認テストの最高点
-export async function getProgress() {
+export async function getLessonOverview() {
   const sb = await client()
-  const [p, r] = await Promise.all([
-    sb.from('lesson_progress').select('lessons(code)'),
-    sb.from('test_results').select('score, lessons(code)').eq('test_type', 'quiz'),
-  ])
+  const { data } = await sb
+    .from('lessons')
+    .select('id, code, title, sort_order, category, lesson_progress!left(id), test_results!left(score)')
+    .eq('test_results.test_type', 'quiz')
+    .order('sort_order')
+  const rows = (data ?? []) as unknown as (LessonRow & {
+    lesson_progress?: { id: number }[] | null
+    test_results?: { score: number }[] | null
+  })[]
   const cleared = new Set<string>()
-  for (const row of (p.data ?? []) as unknown as { lessons: { code: string } | null }[]) if (row.lessons) cleared.add(row.lessons.code)
   const best: Record<string, number> = {}
-  for (const row of (r.data ?? []) as unknown as { score: number; lessons: { code: string } | null }[]) {
-    const c = row.lessons?.code
-    if (c) best[c] = Math.max(best[c] ?? 0, row.score)
-  }
-  return { cleared, best }
+  const lessons = rows.map((row) => {
+    if (row.lesson_progress?.length) cleared.add(row.code)
+    for (const result of row.test_results ?? []) best[row.code] = Math.max(best[row.code] ?? 0, result.score)
+    return {
+      id: row.id,
+      code: row.code,
+      title: row.title,
+      sort_order: row.sort_order,
+      category: row.category,
+    }
+  })
+  return { lessons, cleared, best }
 }
 
 export async function getLesson(code: string): Promise<{ lesson: LessonRow; steps: StepRow[] } | null> {
