@@ -6,7 +6,7 @@ import { getLesson, getQuizQuestions } from '@/lib/db'
 // S-04 確認テスト画面
 export default function QuizPage({ params }: PageProps<'/lessons/[id]/quiz'>) {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<p>読み込み中…</p>}>
       <Quiz params={params} />
     </Suspense>
   )

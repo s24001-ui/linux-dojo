@@ -6,7 +6,7 @@ import { getLesson, getLessons, getQuestionsByIds } from '@/lib/db'
 // S-05 確認テスト結果画面（?r=問題ID:正誤,問題ID:正誤,…）
 export default function ResultPage(props: PageProps<'/lessons/[id]/result'>) {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<p>結果を読み込み中…</p>}>
       <Result {...props} />
     </Suspense>
   )

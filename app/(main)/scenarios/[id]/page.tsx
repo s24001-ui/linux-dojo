@@ -6,7 +6,7 @@ import { getScenario } from '@/lib/db'
 // S-15 シナリオ画面
 export default function ScenarioPage({ params }: PageProps<'/scenarios/[id]'>) {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<p>読み込み中…</p>}>
       <Scenario params={params} />
     </Suspense>
   )

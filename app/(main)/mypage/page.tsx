@@ -7,7 +7,7 @@ import { QUIZ_SIZE } from '@/lib/quiz'
 // S-13 マイページ（レベル・XP・バッジは【Want】のため未実装）
 export default function MyPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<p>読み込み中…</p>}>
       <My />
     </Suspense>
   )

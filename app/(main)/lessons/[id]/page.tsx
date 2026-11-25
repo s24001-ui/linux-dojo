@@ -7,7 +7,7 @@ import { getLesson } from '@/lib/db'
 
 export default function LessonPage({ params }: PageProps<'/lessons/[id]'>) {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<p>読み込み中…</p>}>
       <Lesson params={params} />
     </Suspense>
   )
