@@ -843,3 +843,37 @@ from lessons l,
 ) as v(body, choices, correct_index, explanation)
 where l.code = $s$chmod$s$
   and not exists (select 1 from questions q where q.lesson_id = l.id and q.question_type = 'quiz');
+
+  -- Linuxコマンド道場：chmod の「エラー修復ミッション」5問と「シナリオ」2問
+-- Supabase の SQL Editor に貼り付けて実行する。何度実行しても壊れない（同じタイトルがあれば入れない）。
+-- 先に、lib/terminal.ts・lib/condition.ts を新しい版に置き換えて、Vercel にデプロイしておくこと。
+
+-- ========== エラー修復ミッション ==========
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$chmod$s$, $s$スクリプトが実行できない$s$, $s$backup.sh を実行しようとしたら、エラーが出ました。$s$, $j${"fs": {"files": {"backup.sh": "#!/bin/bash\nmkdir backup\ncp memo.txt backup\n", "memo.txt": "大事なメモ"}}, "error": {"cmd": "./backup.sh", "msg": "bash: ./backup.sh: Permission denied"}, "hints": ["エラーは「権限がないので実行できない」という意味です。", "ls -l backup.sh で権限を見ると、x（実行）がありません。", "chmod +x backup.sh で実行権限をつけてから、もう一度 ./backup.sh を実行しましょう。"], "checks": [{"userPerms": {"backup.sh": "x"}, "dirs": ["backup"], "files": ["backup/memo.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$スクリプトが実行できない$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$chmod$s$, $s$ファイルが読めない$s$, $s$diary.txt の中身を見ようとしたら、エラーが出ました。$s$, $j${"fs": {"files": {"diary.txt": "きょうの日記"}, "modes": {"diary.txt": "000"}}, "error": {"cmd": "cat diary.txt", "msg": "cat: diary.txt: Permission denied"}, "hints": ["エラーは「権限がないので読めない」という意味です。", "ls -l diary.txt で権限を見ると、r（読む）がありません。", "chmod u+r diary.txt（または chmod 600 diary.txt）で読めるようにして、もう一度 cat diary.txt を実行しましょう。"], "checks": [{"userPerms": {"diary.txt": "r"}, "commands": ["^cat\\s+(\\./)?diary\\.txt$"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$ファイルが読めない$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$chmod$s$, $s$ファイルに書き込めない$s$, $s$memo.txt に文字を書き足そうとしたら、エラーが出ました。$s$, $j${"fs": {"files": {"memo.txt": "予定"}, "modes": {"memo.txt": "444"}}, "error": {"cmd": "echo done >> memo.txt", "msg": "bash: memo.txt: Permission denied"}, "hints": ["エラーは「権限がないので書き込めない」という意味です。", "ls -l memo.txt で権限を見ると、w（書く）がありません（r--r--r--）。", "chmod u+w memo.txt（または chmod 644 memo.txt）で書けるようにして、もう一度 echo done >> memo.txt を実行しましょう。"], "checks": [{"userPerms": {"memo.txt": "w"}, "commands": ["^echo\\s+.*>>?\\s*memo\\.txt$"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$ファイルに書き込めない$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$chmod$s$, $s$フォルダに入れない$s$, $s$private フォルダに入ろうとしたら、エラーが出ました。$s$, $j${"fs": {"files": {"private/note.txt": "ないしょのメモ"}, "modes": {"private": "600"}}, "error": {"cmd": "cd private", "msg": "bash: cd: private: Permission denied"}, "hints": ["エラーは「権限がないので入れない」という意味です。", "フォルダに入るには、x（実行）の権限が必要です。ls -l で private の権限を見てみましょう。", "chmod u+x private（または chmod 700 private）をしてから、もう一度 cd private を実行しましょう。"], "checks": [{"cwd": "~/private"}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$フォルダに入れない$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'repair', $s$chmod$s$, $s$権限の数字が正しくない$s$, $s$run.sh に実行権限をつけようとしたら、エラーが出ました。$s$, $j${"fs": {"files": {"run.sh": "#!/bin/bash\nmkdir report\ntouch report/ok.txt\n"}}, "error": {"cmd": "chmod 999 run.sh", "msg": "chmod: invalid mode: ‘999’"}, "hints": ["エラーは「権限の指定が正しくない」という意味です。", "権限の数字は、0〜7 の3つの数字です。9 は使えません。", "自分が実行できる権限の数字（たとえば 755）にして chmod を実行し、そのあと ./run.sh を実行しましょう。"], "checks": [{"userPerms": {"run.sh": "x"}, "commands": ["^\\./run\\.sh$"], "dirs": ["report"], "files": ["report/ok.txt"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'repair' and title = $s$権限の数字が正しくない$s$);
+
+-- ========== シナリオ ==========
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'scenario', $s$chmod$s$, $s$スクリプトを使えるようにしよう$s$, $s$ホームに deploy.sh と app.txt があります。deploy.sh を scripts フォルダにまとめ、実行できるようにして動かし、最後に自分だけが使えるように守りましょう。$s$, $j${"summary": "もらったスクリプトを整理して実行し、自分だけが使えるようにする", "commands": "mkdir / mv / chmod / ./", "fs": {"files": {"deploy.sh": "#!/bin/bash\nmkdir release\ncp app.txt release\n", "app.txt": "アプリ本体"}}, "goals": [{"label": "scripts フォルダを作って、deploy.sh を移動する", "hints": ["フォルダを作るコマンドと、移動するコマンドを使います。", "mkdir のあとに mv。mv は「mv 移動するもの 移動先」の順です。", "mkdir scripts / mv deploy.sh scripts"], "dirs": ["scripts"], "files": ["scripts/deploy.sh"], "absent": ["deploy.sh"]}, {"label": "scripts/deploy.sh を実行できるようにする", "hints": ["まず ls -l scripts で、deploy.sh の権限を見てみましょう。", "実行権限は x です。chmod に記号か数字で指定します。", "chmod +x scripts/deploy.sh"], "userPerms": {"scripts/deploy.sh": "x"}}, {"label": "deploy.sh を実行して、release フォルダを作る", "hints": ["スクリプトは、パスの前に ./ をつけて実行します。", "ホームにいるまま（cd しないで）./scripts/deploy.sh を実行します。実行権限がないと Permission denied になります。", "./scripts/deploy.sh"], "dirs": ["release"], "files": ["release/app.txt"]}, {"label": "scripts/deploy.sh を、自分だけが読み書き・実行できる 700 にする", "hints": ["権限を数字で指定します。左から「自分・グループ・その他」の順です。", "自分は rwx（7）、ほかの人は何もできない（0）にします。", "chmod 700 scripts/deploy.sh"], "modes": {"scripts/deploy.sh": "700"}}], "checks": [{"modes": {"scripts/deploy.sh": "700"}, "dirs": ["scripts", "release"], "files": ["scripts/deploy.sh", "release/app.txt"], "absent": ["deploy.sh"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'scenario' and title = $s$スクリプトを使えるようにしよう$s$);
+
+insert into questions (question_type, command_tag, title, body, setup_data)
+select 'scenario', $s$chmod$s$, $s$ひみつのファイルを守ろう$s$, $s$diary.txt をほかの人に見られないようにします。private フォルダにしまって、フォルダごと自分だけが使えるようにしましょう。$s$, $j${"summary": "大事なファイルをフォルダにしまい、自分だけが使えるようにする", "commands": "mkdir / mv / chmod -R / cat", "fs": {"files": {"diary.txt": "ひみつの日記", "memo.txt": "ふつうのメモ"}}, "goals": [{"label": "private フォルダを作って、diary.txt を移動する", "hints": ["フォルダを作るコマンドと、移動するコマンドを使います。", "mkdir のあとに mv。mv は「mv 移動するもの 移動先」の順です。", "mkdir private / mv diary.txt private"], "dirs": ["private"], "files": ["private/diary.txt"], "absent": ["diary.txt"]}, {"label": "private フォルダとその中身を、まとめて 700 にする", "hints": ["フォルダの中身も一度に変えるオプションがあります。", "-R は recursive：フォルダの中身までまとめて、という意味です。", "chmod -R 700 private"], "modes": {"private": "700", "private/diary.txt": "700"}}, {"label": "cat で、diary.txt が自分には読めることを確かめる", "hints": ["中身を見るコマンドは？", "cat のあとに、ファイルのパスを書きます。", "cat private/diary.txt"], "commands": ["^cat\\s+(\\./)?(private/)?diary\\.txt$"]}], "checks": [{"modes": {"private": "700", "private/diary.txt": "700"}, "dirs": ["private"], "files": ["private/diary.txt", "memo.txt"], "absent": ["diary.txt"], "commands": ["^cat\\s+(\\./)?(private/)?diary\\.txt$"]}]}$j$::jsonb
+where not exists (select 1 from questions where question_type = 'scenario' and title = $s$ひみつのファイルを守ろう$s$);
