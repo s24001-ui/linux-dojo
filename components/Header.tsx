@@ -11,7 +11,7 @@ const NAV = [
   { href: '/mypage', label: 'マイページ' },
 ]
 
-export default function Header() {
+export default function Header({ isTeacher = false }: { isTeacher?: boolean }) {
   const pathname = usePathname()
   const active = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href))
 
@@ -24,7 +24,7 @@ export default function Header() {
         >
           Linuxコマンド道場
         </Link>
-        <nav aria-label="メインナビゲーション" className="flex shrink-0 flex-nowrap gap-1 text-sm">
+        <nav aria-label="メインナビゲーション" className="flex shrink-0 flex-nowrap items-center gap-1 text-sm">
           {NAV.map((n) => (
             <Link
               key={n.href}
@@ -35,6 +35,15 @@ export default function Header() {
               {n.label}
             </Link>
           ))}
+          {/* 先生のアカウントのときだけ表示する */}
+          {isTeacher && (
+            <Link
+              href="/admin"
+              className="ml-3 whitespace-nowrap rounded border-2 border-[#3d5a80] px-3 py-1 font-bold text-[#3d5a80] hover:bg-[#eef2f7]"
+            >
+              先生用ページ
+            </Link>
+          )}
         </nav>
       </div>
     </header>
